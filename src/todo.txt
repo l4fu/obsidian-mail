@@ -1,0 +1,211 @@
+
+
+
+
+✅ done :接入 Obsidian Keychain,核心是用官方提供的 SecretStorage API + SecretComponent 组件,实现"从 Keychain 选密钥、读取密钥、保存密钥",全程不暴露明文,安全又规范。
+已完成:
+1. ✅ 升级 obsidian 依赖到 ^1.11.4
+2. ✅ 修改 MailAccount 接口,添加 passwordSecretId 字段存储 Keychain 密钥 ID
+3. ✅ 在设置界面集成 SecretComponent 组件(使用 addComponent 方法)
+4. ✅ 创建 getPasswordFromKeychain 辅助函数,从 Keychain 读取密码
+5. ✅ 修改 connectIMAP 函数,从 Keychain 获取密码
+6. ✅ 修改 createSMTPClient 函数,从 Keychain 获取密码
+7. ✅ 修改相关调用处,添加 await
+
+使用说明:
+- 在插件设置的账户配置中,"密码/授权码"字段现在使用 Keychain 组件
+- 点击下拉框可选择已存密钥或点击"+"新建密钥
+- 密钥 ID 保存到插件设置,密码明文仅存储在 Keychain 中
+- IMAP/SMTP 连接时自动从 Keychain 读取密码
+- 支持错误提示:Keychain 未启用、密码不存在等情况
+
+注意事项:
+- 需要 Obsidian v1.11.4 或更高版本
+- 旧账户的明文密码会自动迁移,建议重新配置以使用 Keychain
+- 密钥 ID 区分大小写,建议使用小写字母和数字组合
+一、前置条件
+Obsidian 版本 ≥ 1.11.4(Keychain 功能上线)
+插件依赖:obsidian 包版本 ≥ 1.11.4
+权限:无需额外权限,SecretStorage 是内置 API
+二、核心 API 与组件(TypeScript)
+1. SecretStorage(读写密钥)
+通过 this.app.secrets 访问,异步操作:
+typescript
+运行
+// 1. 检查 Keychain 是否启用
+const isEnabled = await this.app.secrets.isEnabled();
+
+// 2. 保存密钥到 Keychain(id 唯一标识,value 是密钥明文)
+await this.app.secrets.setSecret("my-plugin-api-key", "sk-xxxxxx");
+
+// 3. 从 Keychain 读取密钥(返回明文,仅插件自己能读)
+const apiKey = await this.app.secrets.getSecret("my-plugin-api-key");
+
+// 4. 删除密钥
+await this.app.secrets.deleteSecret("my-plugin-api-key");
+
+// 5. 获取所有密钥 ID 列表
+const secretIds = await this.app.secrets.listSecrets();
+2. SecretComponent(设置页密钥选择器)
+在插件设置页添加 "从 Keychain 选择密钥" 下拉框,用户可直接选已存密钥,也可新建:
+typescript
+运行
+import { Plugin, Setting, SecretComponent } from "obsidian";
+
+// 在设置页添加密钥选择项
+new Setting(containerEl)
+  .setName("API Key")
+  .setDesc("从 Obsidian Keychain 选择或添加 API 密钥")
+  .addSecretComponent((secretComp) => {
+    // 绑定插件设置里的密钥 ID(如 this.settings.apiKeyId)
+    secretComp.setValue(this.settings.apiKeyId || "")
+      // 选择/新建后,保存密钥 ID 到插件设置
+      .onChange(async (secretId) => {
+        this.settings.apiKeyId = secretId;
+        await this.saveSettings();
+        new Notice("API Key 已保存到 Keychain");
+      });
+  });
+
+
+✅ done : 粘贴识别收件人列表（逗号/分号/换行分隔的 姓名<邮箱>），自动去重规范化并存入联系人列表（v1.3.0，18 个单元测试全通过）
+
+✅ done : 发件窗口改为 Obsidian 标签页，关闭未保存时询问是否存草稿（v1.2.0）
+
+✅ done : 邮件笔记顶部按钮栏：回复/回复全部/转发/作为附件转发/标记垃圾邮件（v1.1.1/v1.1.2）
+
+✅ done : Foxmail 风格三栏邮件客户端视图（v1.1.0）
+
+✅ done : 收件人兼容这种格式的输入： 姜<jiangy36@chinatelecom.cn>,  余帅<yujs2@chinatelecom.cn>,   
+（v1.1.0 已修复：新增 parseEmailList 健壮解析器，支持 姓名<邮箱>、中英文逗号/分号分隔、引号名称，并带邮箱格式校验）
+
+✅ done : 转发的时候没有正确的读取附件，只是包含了附件的url ，导致对方打开时是一个无法访问的链接。
+（v1.1.0 已修复：转发时多级路径候选解析真实附件文件并作为 SMTP 附件发送，同时从转发正文中剔除 Vault 附件链接）
+
+
+
+三、完整开发流程(从 0 到 1)
+步骤 1:升级依赖
+在 package.json 中确保 obsidian 版本 ≥ 1.11.4:
+json
+{
+  "dependencies": {
+    "obsidian": "^1.11.4"
+  }
+}
+步骤 2:定义插件设置(存储密钥 ID)
+typescript
+运行
+// 定义设置接口(只存密钥ID,不存明文)
+interface MyPluginSettings {
+  apiKeyId: string; // Keychain 中的密钥唯一ID
+}
+
+// 默认设置
+const DEFAULT_SETTINGS: MyPluginSettings = {
+  apiKeyId: ""
+};
+
+export default class MyPlugin extends Plugin {
+  settings: MyPluginSettings;
+
+  async onload() {
+    await this.loadSettings();
+    this.addSettingTab(new MySettingTab(this.app, this));
+  }
+
+  async loadSettings() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+  }
+
+  async saveSettings() {
+    await this.saveData(this.settings);
+  }
+}
+步骤 3:设置页集成 SecretComponent
+typescript
+运行
+class MySettingTab extends PluginSettingTab {
+  plugin: MyPlugin;
+
+  constructor(app: App, plugin: MyPlugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+
+  display(): void {
+    const { containerEl } = this;
+    containerEl.empty();
+
+    // 1. Keychain 启用状态提示
+    new Setting(containerEl)
+      .setName("Keychain 状态")
+      .setDesc(
+        this.app.secrets.isEnabled()
+          ? "✅ 已启用,可安全存储密钥"
+          : "❌ 未启用,请在 Obsidian 设置 → Keychain 中开启"
+      );
+
+    // 2. 密钥选择组件(核心)
+    new Setting(containerEl)
+      .setName("API Key")
+      .setDesc("选择已存密钥,或点击下拉框右侧「+」新建密钥")
+      .addSecretComponent((secretComp) => {
+        secretComp
+          .setValue(this.plugin.settings.apiKeyId)
+          .onChange(async (secretId) => {
+            this.plugin.settings.apiKeyId = secretId;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    // 3. 测试读取密钥(可选)
+    new Setting(containerEl)
+      .setName("测试密钥")
+      .addButton((btn) =>
+        btn
+          .setButtonText("测试读取")
+          .onClick(async () => {
+            const secretId = this.plugin.settings.apiKeyId;
+            if (!secretId) {
+              new Notice("请先选择或添加密钥");
+              return;
+            }
+            try {
+              const key = await this.app.secrets.getSecret(secretId);
+              new Notice(`密钥读取成功(前8位:${key.slice(0,8)}...)`);
+            } catch (e) {
+              new Notice(`读取失败:${e.message}`);
+            }
+          })
+      );
+  }
+}
+步骤 4:业务代码中读取密钥
+typescript
+运行
+// 在插件逻辑中,通过密钥ID读取真实密钥
+async function callAPI(plugin: MyPlugin) {
+  const secretId = plugin.settings.apiKeyId;
+  if (!secretId) {
+    new Notice("请先在设置中配置 API Key");
+    return;
+  }
+  try {
+    // 从 Keychain 读取明文密钥
+    const apiKey = await plugin.app.secrets.getSecret(secretId);
+    // 调用 API(示例)
+    const res = await fetch("https://api.example.com", {
+      headers: { Authorization: `Bearer ${apiKey}` }
+    });
+    const data = await res.json();
+    console.log("API 响应:", data);
+  } catch (e) {
+    new Notice(`API 调用失败:${e.message}`);
+  }
+}
+四、关键安全与规范
+只存 ID,不存明文:插件设置里只存 secretId,绝对不要把密钥明文存在 data.json 或本地文件中。
+错误处理:getSecret 可能抛出异常(如 Keychain 未启用、密钥不存在),必须 try/catch。
+用户体验:先检查 isEnabled(),提示用户开启 Keychain;密钥读取成功后只显示前几位,不暴露完整密钥。
+跨设备同步:Keychain 数据会随 Obsidian Sync 加密同步,插件无需额外处理。

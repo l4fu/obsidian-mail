@@ -1,0 +1,39 @@
+# vscode
+.vscode 
+
+# Intellij
+*.iml
+.idea
+
+# npm
+node_modules
+# 
+test_note
+参考
+bak
+
+*.zip
+
+obsidian-sample-plugin-master
+obsidian-api-master
+obsidian-developer-docs-main
+
+# Don't include the compiled main.js file in the repo.
+# They should be uploaded to GitHub releases instead.
+main.js
+
+# Exclude sourcemaps
+*.map
+
+# obsidian
+data.json
+
+# Exclude macOS Finder (System Explorer) View States
+.DS_Store
+
+# mail
+3-Mail
+
+
+# cowork temp
+.cowork-temp
