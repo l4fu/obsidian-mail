@@ -3,3 +3,4 @@ declare module 'imap';
 declare module 'mailparser';
 declare module 'nodemailer';
 declare module 'html-to-markdown';
+declare module 'proxy-agent';

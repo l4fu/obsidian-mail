@@ -1,5 +1,6 @@
 const esbuild = require('esbuild');
-const builtinModules = require('builtin-modules');
+// 使用 Node 内置的 module.builtinModules 替代 builtin-modules 包（审查建议）
+const { builtinModules } = require('module');
 const fs = require('fs');
 const path = require('path');
 const isProd = process.argv[2] === 'production';
@@ -19,39 +20,42 @@ const nodeBuiltins = [
   'node:events'
 ];
 
-// CSS 文件处理函数
+// CSS / manifest 文件处理函数（保证测试 Vault 插件目录与仓库源一致）
 async function copyCSS() {
   const cssSource = path.join(__dirname, 'styles/foxmail-email.css');
+  const manifestSource = path.join(__dirname, 'manifest.json');
   
   // 两个目标位置都复制
+  const pluginDir = path.join(__dirname, './test_note/.obsidian/plugins/ob-mail-client');
   const targets = [
-    path.join(__dirname, './test_note/.obsidian/plugins/obsidian-mail/styles.css'),
+    { src: cssSource, dest: path.join(pluginDir, 'styles.css') },
+    { src: manifestSource, dest: path.join(pluginDir, 'manifest.json') },
     // Windows Obsidian 实际插件目录
-    // path.join(process.env.APPDATA || '', 'Obsidian/.obsidian/plugins/obsidian-mail/styles.css')
+    // { src: cssSource, dest: path.join(process.env.APPDATA || '', 'Obsidian/.obsidian/plugins/ob-mail-client/styles.css') }
   ];
   
   try {
-    for (const cssDest of targets) {
+    for (const { src, dest } of targets) {
       try {
         // 确保目标目录存在
-        const destDir = path.dirname(cssDest);
+        const destDir = path.dirname(dest);
         if (!fs.existsSync(destDir)) {
           fs.mkdirSync(destDir, { recursive: true });
         }
         
-        // 复制 CSS 文件
-        if (fs.existsSync(cssSource)) {
-          fs.copyFileSync(cssSource, cssDest);
-          console.log('✅ CSS 文件已复制到:', cssDest);
+        // 复制文件
+        if (fs.existsSync(src)) {
+          fs.copyFileSync(src, dest);
+          console.log('✅ 已复制:', dest);
         } else {
-          console.warn('⚠️ 警告：CSS 源文件不存在:', cssSource);
+          console.warn('⚠️ 警告：源文件不存在:', src);
         }
       } catch (err) {
-        console.warn('⚠️ 复制到', cssDest, '失败:', err.message);
+        console.warn('⚠️ 复制到', dest, '失败:', err.message);
       }
     }
   } catch (err) {
-    console.error('❌ 复制 CSS 文件失败:', err);
+    console.error('❌ 复制文件失败:', err);
   }
 }
 
@@ -63,12 +67,11 @@ const config = {
     ...nodeBuiltins,
   ],
   format: 'cjs',
-  watch: !isProd,
   target: 'es2018',
   logLevel: 'info',
   sourcemap: isProd ? false : 'inline',
   treeShaking: true,
-  outfile: './test_note/.obsidian/plugins/obsidian-mail/main.js',
+  outfile: './test_note/.obsidian/plugins/ob-mail-client/main.js',
   plugins: [{
     name: 'copy-css',
     setup(build) {
@@ -79,4 +82,9 @@ const config = {
   }]
 };
 
-esbuild.build(config).catch(() => process.exit(1));
+// esbuild >= 0.25 移除了 build() 的 watch 选项，开发模式改用 context API
+if (isProd) {
+  esbuild.build(config).catch(() => process.exit(1));
+} else {
+  esbuild.context(config).then(ctx => ctx.watch()).catch(() => process.exit(1));
+}

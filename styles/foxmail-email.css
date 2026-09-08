@@ -1,0 +1,1239 @@
+/* ====================================
+   Foxmail 风格邮件显示优化
+   仅适用于 frontmatter 中包含 cssclasses: email-note 的笔记
+   ==================================== */
+
+/* 
+   CRITICAL: 使用属性选择器检测 frontmatter 中的 cssclasses
+   Obsidian 会将 frontmatter 数据存储在 DOM 属性中
+   格式：data-property-cssclasses="email-note"
+*/
+
+/* 主题变量 - 在包含 email-note cssclass 的根元素上定义 */
+[data-property-cssclasses*="email-note"] {
+    /* 浅色主题变量 */
+    --mail-bg-primary: #ffffff;
+    --mail-bg-secondary: #f5f5f5;
+    --mail-border-color: #e0e0e0;
+    --mail-text-primary: #1f1f1f;
+    --mail-text-secondary: #6b7280;
+    --mail-text-tertiary: #9ca3af;
+    --mail-accent-blue: #0066cc;
+    --mail-accent-green: #34a853;
+    --mail-accent-orange: #ff9800;
+    --mail-accent-red: #ea4335;
+    --mail-header-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --mail-hover-bg: #f0f4ff;
+    --mail-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* 深色主题覆盖 */
+.theme-dark [data-property-cssclasses*="email-note"],
+[data-property-cssclasses*="email-note"].theme-dark {
+    --mail-bg-primary: #1e1e1e;
+    --mail-bg-secondary: #2d2d2d;
+    --mail-border-color: #404040;
+    --mail-text-primary: #e0e0e0;
+    --mail-text-secondary: #a0a0a0;
+    --mail-text-tertiary: #6b6b6b;
+    --mail-accent-blue: #4da3ff;
+    --mail-accent-green: #52c41a;
+    --mail-accent-orange: #ffa940;
+    --mail-accent-red: #ff4d4f;
+    --mail-header-bg: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+    --mail-hover-bg: #2d3748;
+    --mail-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* ====================================
+   邮件容器基础样式
+   仅对 frontmatter 包含 email-note 的笔记生效
+   ==================================== */
+
+/* 使用属性选择器限定作用域 */
+[data-property-cssclasses*="email-note"] .markdown-preview-view {
+    background-color: var(--mail-bg-primary);
+}
+
+/* ====================================
+   邮件头部信息区域（仿 Foxmail）
+   仅在邮件笔记中生效
+   ==================================== */
+
+/* 邮件主题标题 - 仅在 email-note 内生效 */
+[data-property-cssclasses*="email-note"] .markdown-preview-view h1:first-of-type,
+[data-property-cssclasses*="email-note"] .cm-line:has(.cm-header-1):first-of-type {
+    background: var(--mail-header-bg);
+    color: #ffffff !important;
+    padding: 16px 20px;
+    border-radius: 8px 8px 0 0;
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.4;
+    box-shadow: var(--mail-shadow);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* 邮件元数据区块 - 仅在 email-note 内生效 */
+/* 使用属性选择器和通用选择器来近似匹配 */
+[data-property-cssclasses*="email-note"] .markdown-preview-view p {
+    /* 默认样式，让所有段落都有基础格式 */
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+/* 针对包含邮箱链接的段落 */
+[data-property-cssclasses*="email-note"] .markdown-preview-view p:has(a[href^="mailto:"]) {
+    background-color: var(--mail-bg-secondary);
+    border-left: 4px solid var(--mail-accent-blue);
+    padding: 12px 16px;
+    margin: 8px 0;
+    color: var(--mail-text-secondary);
+}
+
+/* ====================================
+   发件人/收件人信息显示优化
+   仅在 email-note 内生效
+   ==================================== */
+
+/* Obsidian 的 metadata-property 容器有 data-property-key 属性 */
+/* 为所有 metadata property value 添加基础样式 */
+[data-property-cssclasses*="email-note"] .markdown-preview-view .metadata-property-value {
+    font-weight: 600;
+}
+
+/* 发件人标签 - 通过父容器的 data-property-key 属性选择 */
+[data-property-cssclasses*="email-note"] .markdown-preview-view .metadata-property[data-property-key="from"] .metadata-property-value {
+    color: var(--mail-accent-green);
+}
+
+[data-property-cssclasses*="email-note"] .markdown-preview-view .metadata-property[data-property-key="from"] .metadata-property-value::before {
+    content: "📧 ";
+}
+
+/* 收件人标签 */
+[data-property-cssclasses*="email-note"] .markdown-preview-view .metadata-property[data-property-key="to"] .metadata-property-value {
+    color: var(--mail-accent-blue);
+}
+
+[data-property-cssclasses*="email-note"] .markdown-preview-view .metadata-property[data-property-key="to"] .metadata-property-value::before {
+    content: "📨 ";
+}
+
+/* 主题标签 */
+[data-property-cssclasses*="email-note"] .markdown-preview-view .metadata-property[data-property-key="subject"] .metadata-property-value {
+    color: var(--mail-accent-orange);
+}
+
+/* 时间标签 */
+[data-property-cssclasses*="email-note"] .markdown-preview-view .metadata-property[data-property-key="created"] .metadata-property-value {
+    color: var(--mail-text-tertiary);
+}
+
+/* ====================================
+   邮箱地址链接样式
+   仅在 email-note 内生效
+   ==================================== */
+[data-property-cssclasses*="email-note"] .markdown-preview-view a[href^="mailto:"],
+[data-property-cssclasses*="email-note"] .markdown-preview-view .email-address {
+    color: var(--mail-accent-blue);
+    text-decoration: none;
+    padding: 2px 8px;
+    background-color: rgba(77, 163, 255, 0.1);
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 12px;
+}
+
+[data-property-cssclasses*="email-note"] .markdown-preview-view a[href^="mailto:"]:hover {
+    background-color: rgba(77, 163, 255, 0.2);
+    text-decoration: underline;
+}
+
+/* ====================================
+   邮件正文区域优化
+   仅在 email-note 内生效
+   ==================================== */
+
+/* 引用块样式（回复邮件中的引用内容）- 仅在 email-note 内 */
+[data-property-cssclasses*="email-note"] .markdown-preview-view blockquote {
+    background-color: var(--mail-bg-secondary);
+    border-left: 4px solid var(--mail-accent-blue);
+    padding: 12px 16px;
+    margin: 16px 0;
+    color: var(--mail-text-secondary);
+    font-style: italic;
+    border-radius: 0 4px 4px 0;
+}
+
+/* 代码块样式 - 仅在 email-note 内 */
+[data-property-cssclasses*="email-note"] .markdown-preview-view pre {
+    background-color: var(--mail-bg-secondary) !important;
+    border: 1px solid var(--mail-border-color);
+    border-radius: 6px;
+    padding: 12px;
+    overflow-x: auto;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+/* 行内代码 - 仅在 email-note 内 */
+[data-property-cssclasses*="email-note"] .markdown-preview-view :not(pre) > code {
+    background-color: var(--mail-bg-secondary);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 12px;
+    color: var(--mail-accent-red);
+}
+
+/* ====================================
+   链接样式优化
+   仅在 email-note 内生效
+   ==================================== */
+[data-property-cssclasses*="email-note"] .markdown-preview-view a:not([href^="mailto:"]) {
+    color: var(--mail-accent-blue);
+    text-decoration: none;
+    border-bottom: 1px dashed var(--mail-accent-blue);
+    transition: all 0.2s ease;
+}
+
+[data-property-cssclasses*="email-note"] .markdown-preview-view a:not([href^="mailto:"]):hover {
+    color: var(--mail-accent-orange);
+    border-bottom-color: var(--mail-accent-orange);
+    background-color: var(--mail-hover-bg);
+}
+
+/* ====================================
+   附件区域样式优化
+   仅在 email-note 内生效
+   ==================================== */
+[data-property-cssclasses*="email-note"] .markdown-preview-view h2:contains("附件"),
+[data-property-cssclasses*="email-note"] .markdown-preview-view h3:contains("附件") {
+    color: var(--mail-accent-orange);
+    border-bottom: 2px solid var(--mail-accent-orange);
+    padding-bottom: 8px;
+    margin-top: 24px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+[data-property-cssclasses*="email-note"] .markdown-preview-view ul:has(a[href*="附件"]),
+[data-property-cssclasses*="email-note"] .markdown-preview-view ul:has(a[href*="attachment"]) {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+    list-style: none;
+    padding: 0;
+}
+
+[data-property-cssclasses*="email-note"] .markdown-preview-view ul:has(a[href*="附件"]) li,
+[data-property-cssclasses*="email-note"] .markdown-preview-view ul:has(a[href*="attachment"]) li {
+    background-color: var(--mail-bg-secondary);
+    border: 1px solid var(--mail-border-color);
+    border-radius: 6px;
+    padding: 12px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+[data-property-cssclasses*="email-note"] .markdown-preview-view ul:has(a[href*="附件"]) li:hover,
+[data-property-cssclasses*="email-note"] .markdown-preview-view ul:has(a[href*="attachment"]) li:hover {
+    border-color: var(--mail-accent-blue);
+    background-color: var(--mail-hover-bg);
+    transform: translateY(-2px);
+    box-shadow: var(--mail-shadow);
+}
+
+/* 附件图标 - 仅在 email-note 内 */
+[data-property-cssclasses*="email-note"] .markdown-preview-view ul:has(a[href*="附件"]) li::before {
+    content: "📎";
+    font-size: 16px;
+}
+
+/* ====================================
+   表格样式优化（用于显示邮件信息）
+   仅在 email-note 内生效
+   ==================================== */
+[data-property-cssclasses*="email-note"] .markdown-preview-view table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    background-color: var(--mail-bg-primary);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: var(--mail-shadow);
+}
+
+[data-property-cssclasses*="email-note"] .markdown-preview-view table thead {
+    background: var(--mail-header-bg);
+    color: #ffffff;
+}
+
+[data-property-cssclasses*="email-note"] .markdown-preview-view table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+[data-property-cssclasses*="email-note"] .markdown-preview-view table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--mail-border-color);
+    color: var(--mail-text-primary);
+}
+
+[data-property-cssclasses*="email-note"] .markdown-preview-view table tr:last-child td {
+    border-bottom: none;
+}
+
+[data-property-cssclasses*="email-note"] .markdown-preview-view table tr:hover td {
+    background-color: var(--mail-hover-bg);
+}
+
+/* ====================================
+   列表样式优化
+   仅在 email-note 内生效
+   ==================================== */
+[data-property-cssclasses*="email-note"] .markdown-preview-view ul:not(:has(a[href*="附件"])) {
+    padding-left: 24px;
+}
+
+[data-property-cssclasses*="email-note"] .markdown-preview-view ul:not(:has(a[href*="附件"])) li {
+    margin: 8px 0;
+    line-height: 1.6;
+    color: var(--mail-text-primary);
+}
+
+/* ====================================
+   图片样式优化
+   仅在 email-note 内生效
+   ==================================== */
+[data-property-cssclasses*="email-note"] .markdown-preview-view img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: var(--mail-shadow);
+    margin: 16px 0;
+    display: block;
+}
+
+/* ====================================
+   分隔线样式
+   仅在 email-note 内生效
+   ==================================== */
+[data-property-cssclasses*="email-note"] .markdown-preview-view hr {
+    border: none;
+    height: 2px;
+    background: linear-gradient(to right, 
+        var(--mail-accent-blue), 
+        var(--mail-accent-green), 
+        var(--mail-accent-orange));
+    margin: 24px 0;
+    border-radius: 2px;
+}
+
+/* ====================================
+   特殊标记和强调
+   仅在 email-note 内生效
+   ==================================== */
+[data-property-cssclasses*="email-note"] .markdown-preview-view strong {
+    color: var(--mail-text-primary);
+    font-weight: 600;
+}
+
+[data-property-cssclasses*="email-note"] .markdown-preview-view em {
+    color: var(--mail-text-secondary);
+    font-style: italic;
+}
+
+/* ====================================
+   响应式设计
+   仅在 email-note 内生效
+   ==================================== */
+@media (max-width: 768px) {
+    [data-property-cssclasses*="email-note"] .markdown-preview-view h1:first-of-type {
+        font-size: 18px;
+        padding: 12px 16px;
+    }
+    
+    [data-property-cssclasses*="email-note"] .markdown-preview-view table {
+        font-size: 12px;
+    }
+    
+    [data-property-cssclasses*="email-note"] .markdown-preview-view table th,
+    [data-property-cssclasses*="email-note"] .markdown-preview-view table td {
+        padding: 8px;
+    }
+}
+
+/* ====================================
+   打印优化
+   仅在 email-note 内生效
+   ==================================== */
+@media print {
+    [data-property-cssclasses*="email-note"] .markdown-preview-view h1:first-of-type {
+        background: none;
+        color: #000000;
+        box-shadow: none;
+    }
+    
+    [data-property-cssclasses*="email-note"] .markdown-preview-view a {
+        text-decoration: underline;
+    }
+}
+
+
+/* ====================================
+   Foxmail 风格邮件客户端视图
+   （三栏布局：文件夹树 | 邮件列表 | 阅读窗格）
+   ==================================== */
+.foxmail-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: var(--background-primary);
+    font-size: 13px;
+}
+
+/* ---------- 顶部工具栏 ---------- */
+.foxmail-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    background: var(--background-secondary);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.foxmail-toolbar-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-muted);
+    user-select: none;
+}
+
+.foxmail-toolbar-btn:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.foxmail-toolbar-btn:active {
+    background: var(--background-modifier-active-hover);
+}
+
+.foxmail-toolbar-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.foxmail-toolbar-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.foxmail-toolbar-label {
+    font-size: 11px;
+    line-height: 1;
+}
+
+/* 搜索框 */
+.foxmail-search {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+}
+
+.foxmail-search-input {
+    width: 160px;
+    padding: 4px 10px;
+    border-radius: 14px;
+    border: 1px solid var(--background-modifier-border);
+    background: var(--background-primary);
+    color: var(--text-normal);
+    font-size: 12px;
+}
+
+.foxmail-search-input:focus {
+    border-color: var(--interactive-accent);
+    outline: none;
+}
+
+/* ---------- 三栏主体 ---------- */
+.foxmail-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* 左栏：文件夹树 */
+.foxmail-folders {
+    width: 170px;
+    min-width: 130px;
+    border-right: 1px solid var(--background-modifier-border);
+    overflow-y: auto;
+    padding: 8px 6px;
+    background: var(--background-secondary);
+    flex-shrink: 0;
+}
+
+.foxmail-account {
+    margin-bottom: 12px;
+}
+
+.foxmail-account-name {
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 4px 8px;
+    text-transform: none;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.foxmail-folder {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 8px 5px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-normal);
+    white-space: nowrap;
+}
+
+.foxmail-folder:hover {
+    background: var(--background-modifier-hover);
+}
+
+.foxmail-folder.is-selected {
+    background: var(--background-modifier-hover);
+    color: var(--text-on-accent);
+    background-color: var(--interactive-accent);
+}
+
+.foxmail-folder.is-selected .foxmail-folder-name {
+    color: var(--text-on-accent);
+}
+
+.foxmail-folder-name {
+    font-size: 13px;
+}
+
+.foxmail-unread-badge {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border-radius: 9px;
+    font-size: 10px;
+    min-width: 18px;
+    height: 18px;
+    line-height: 18px;
+    text-align: center;
+    padding: 0 5px;
+    font-weight: 600;
+}
+
+.foxmail-folder.is-selected .foxmail-unread-badge {
+    background: rgba(255, 255, 255, 0.25);
+    color: var(--text-on-accent);
+}
+
+.foxmail-total-badge {
+    color: var(--text-faint);
+    font-size: 11px;
+}
+
+/* 中栏：邮件列表 */
+.foxmail-list {
+    width: 300px;
+    min-width: 220px;
+    border-right: 1px solid var(--background-modifier-border);
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+.foxmail-mail-row {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    cursor: pointer;
+}
+
+.foxmail-mail-row:hover {
+    background: var(--background-modifier-hover);
+}
+
+.foxmail-mail-row.is-selected {
+    background: var(--background-modifier-hover);
+    box-shadow: inset 3px 0 0 var(--interactive-accent);
+}
+
+/* Ctrl+点击多选高亮 */
+.foxmail-mail-row.is-multi-selected {
+    background: var(--background-modifier-hover);
+    box-shadow: inset 3px 0 0 var(--text-accent);
+}
+
+/* 发送进度弹窗 */
+.obmail-send-progress {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 2px;
+}
+
+.obmail-send-spinner {
+    display: flex;
+    align-items: center;
+    color: var(--interactive-accent);
+    flex-shrink: 0;
+}
+
+.obmail-send-spinner svg {
+    animation: obmail-spin 1s linear infinite;
+}
+
+@keyframes obmail-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.obmail-send-status {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+/* 多选批量操作条 */
+.foxmail-bulk-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    background: var(--background-secondary);
+    flex-shrink: 0;
+}
+
+.foxmail-bulk-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    flex: 1;
+}
+
+.foxmail-bulk-btn {
+    font-size: 12px;
+    padding: 2px 8px;
+    cursor: pointer;
+}
+
+.foxmail-row-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 3px;
+}
+
+.foxmail-row-sender {
+    font-size: 13px;
+    color: var(--text-normal);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+}
+
+.foxmail-mail-row.is-unread .foxmail-row-sender {
+    font-weight: 700;
+    color: var(--text-normal);
+}
+
+.foxmail-row-date {
+    font-size: 11px;
+    color: var(--text-faint);
+    flex-shrink: 0;
+}
+
+.foxmail-row-bottom {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.foxmail-row-subject {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.foxmail-mail-row.is-unread .foxmail-row-subject {
+    color: var(--text-normal);
+}
+
+.foxmail-row-clip {
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+/* 右栏：阅读窗格 */
+.foxmail-reader {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.foxmail-reader-empty {
+    margin: auto;
+}
+
+.foxmail-reader-header {
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    background: var(--background-primary);
+    flex-shrink: 0;
+}
+
+.foxmail-reader-subject {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-normal);
+    margin-bottom: 8px;
+    word-break: break-word;
+}
+
+.foxmail-reader-subject-line {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.foxmail-reader-subject-line .foxmail-reader-subject {
+    flex: 1;
+}
+
+.foxmail-reader-meta-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 2px;
+}
+
+.foxmail-reader-meta-toggle:hover {
+    color: var(--text-normal);
+    background: var(--background-modifier-hover);
+}
+
+.foxmail-reader-summary {
+    display: none;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    cursor: pointer;
+}
+
+/* 折叠态：隐藏发件人/收件人等明细，显示摘要行 */
+.foxmail-reader-header.is-collapsed .foxmail-reader-meta {
+    display: none;
+}
+
+.foxmail-reader-header.is-collapsed .foxmail-reader-summary {
+    display: block;
+}
+
+.foxmail-reader-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 8px;
+}
+
+.foxmail-reader-meta-line {
+    font-size: 12px;
+    color: var(--text-muted);
+    word-break: break-word;
+}
+
+.foxmail-meta-label {
+    color: var(--text-faint);
+}
+
+.foxmail-meta-value {
+    color: var(--text-muted);
+}
+
+.foxmail-reader-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.foxmail-action-btn {
+    padding: 3px 12px;
+    font-size: 12px;
+    border-radius: 4px;
+    border: 1px solid var(--background-modifier-border);
+    background: var(--background-secondary);
+    color: var(--text-normal);
+    cursor: pointer;
+}
+
+.foxmail-action-btn:hover {
+    background: var(--background-modifier-hover);
+    border-color: var(--interactive-accent);
+}
+
+.foxmail-reader-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+}
+
+/* 底部状态栏 */
+.foxmail-statusbar {
+    padding: 4px 12px;
+    font-size: 11px;
+    color: var(--text-faint);
+    border-top: 1px solid var(--background-modifier-border);
+    background: var(--background-secondary);
+    flex-shrink: 0;
+}
+
+/* 空状态提示 */
+.foxmail-empty-hint {
+    color: var(--text-faint);
+    text-align: center;
+    padding: 24px 12px;
+    font-size: 12px;
+}
+
+/* 窄屏适配：隐藏文件夹栏 */
+@media (max-width: 700px) {
+    .foxmail-folders {
+        display: none;
+    }
+}
+
+
+/* ====================================
+   邮件笔记顶部操作按钮栏（obmail- 前缀避免冲突）
+   注入位置：MarkdownView .view-content 顶部，全视图唯一
+   ==================================== */
+.view-content.has-obmail-bar {
+    display: flex;
+    flex-direction: column;
+}
+
+.view-content.has-obmail-bar > .markdown-preview-view,
+.view-content.has-obmail-bar > .markdown-source-view {
+    flex: 1;
+    min-height: 0;
+}
+
+.obmail-action-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    background: var(--background-secondary);
+    flex-shrink: 0;
+    z-index: 6;
+}
+
+.obmail-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 12px;
+    font-size: 12px;
+    border-radius: 5px;
+    border: 1px solid var(--background-modifier-border);
+    background: var(--background-primary);
+    color: var(--text-normal);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.obmail-action-btn:hover {
+    border-color: var(--interactive-accent);
+    color: var(--interactive-accent);
+    background: var(--background-modifier-hover);
+}
+
+.obmail-action-btn-icon {
+    display: inline-flex;
+    align-items: center;
+}
+
+.obmail-action-btn-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+.obmail-action-btn-danger {
+    color: var(--text-error);
+}
+
+.obmail-action-btn-danger:hover {
+    border-color: var(--text-error);
+    color: var(--text-error);
+    background: rgba(235, 87, 87, 0.08);
+}
+
+
+/* ====================================
+   Foxmail 风格写信视图（标签页）
+   ==================================== */
+.obmail-compose {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: var(--background-primary);
+}
+
+.obmail-compose-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    background: var(--background-secondary);
+    flex-shrink: 0;
+}
+
+.obmail-compose-send {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border: none;
+    padding: 5px 22px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.obmail-compose-send:hover {
+    filter: brightness(1.1);
+}
+
+.obmail-compose-draft,
+.obmail-compose-attach {
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    padding: 5px 14px;
+    border-radius: 5px;
+    cursor: pointer;
+    color: var(--text-normal);
+}
+
+.obmail-compose-draft:hover,
+.obmail-compose-attach:hover {
+    border-color: var(--interactive-accent);
+    color: var(--interactive-accent);
+}
+
+.obmail-file-input {
+    display: none;
+}
+
+.obmail-compose-account {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.obmail-account-select {
+    max-width: 280px;
+}
+
+/* 字段区 */
+.obmail-compose-fields {
+    border-bottom: 1px solid var(--background-modifier-border);
+    flex-shrink: 0;
+}
+
+.obmail-compose-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    border-bottom: 1px solid var(--background-modifier-border-hover);
+}
+
+.obmail-compose-row:last-child {
+    border-bottom: none;
+}
+
+.obmail-compose-label {
+    width: 60px;
+    flex-shrink: 0;
+    font-size: 13px;
+    color: var(--text-muted);
+    text-align: right;
+}
+
+.obmail-compose-inputwrap {
+    flex: 1;
+    position: relative;
+    min-width: 0;
+}
+
+.obmail-compose-input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    padding: 6px 4px;
+    font-size: 13px;
+    color: var(--text-normal);
+}
+
+.obmail-compose-input:focus {
+    outline: none;
+    background: var(--background-modifier-hover);
+    border-radius: 4px;
+}
+
+.obmail-contact-btn {
+    flex-shrink: 0;
+    font-size: 12px;
+    padding: 2px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--background-modifier-border);
+    background: var(--background-primary);
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.obmail-contact-btn:hover {
+    color: var(--interactive-accent);
+    border-color: var(--interactive-accent);
+}
+
+/* 自动补全下拉 */
+.obmail-autocomplete {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    display: block;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    box-shadow: var(--shadow-s);
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: var(--layer-menu);
+}
+
+.obmail-autocomplete-item {
+    padding: 6px 10px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.obmail-autocomplete-item.is-selected,
+.obmail-autocomplete-item:hover {
+    background: var(--background-modifier-hover);
+}
+
+.obmail-contact-email {
+    color: var(--text-faint);
+    font-size: 12px;
+}
+
+/* 正文 */
+.obmail-compose-body {
+    flex: 1;
+    min-height: 120px;
+    border: none;
+    resize: none;
+    padding: 12px 16px;
+    font-size: 14px;
+    line-height: 1.6;
+    background: var(--background-primary);
+    color: var(--text-normal);
+}
+
+.obmail-compose-body:focus {
+    outline: none;
+}
+
+/* 附件列表 */
+.obmail-compose-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--background-modifier-border);
+    background: var(--background-secondary);
+    flex-shrink: 0;
+}
+
+/* 联系人自动完成隐藏态（由 TS 侧 addClass/removeClass 切换，避免内联样式） */
+.obmail-autocomplete.is-hidden {
+    display: none;
+}
+
+/* 弹窗底部按钮行（ConfirmModal / 写信关闭确认） */
+.obmail-modal-btn-row {
+    margin-top: 18px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.obmail-modal-btn-cancel {
+    background-color: var(--background-modifier-cta-hover);
+    color: var(--interactive-accent);
+}
+
+.obmail-modal-btn-confirm {
+    background-color: var(--interactive-accent);
+    color: white;
+}
+
+/* 设置页：邮件账户折叠卡片（外观从内联样式迁移，符合插件审查规范） */
+.mail-account {
+    margin-bottom: 20px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.mail-account-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    background-color: var(--background-primary-alt);
+    cursor: pointer;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.mail-account-name {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.mail-account-toggle {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    box-shadow: none;
+}
+
+.mail-account-content {
+    max-height: 0;
+    padding: 0 15px;
+    overflow: hidden;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+}
+
+.mail-account-content.is-expanded {
+    max-height: 2000px;
+    padding: 15px;
+}
+
+.obmail-attach-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    background: var(--background-primary);
+    font-size: 12px;
+}
+
+.obmail-attach-size {
+    color: var(--text-faint);
+}
+
+.obmail-attach-remove {
+    border: none;
+    background: none;
+    color: var(--text-faint);
+    cursor: pointer;
+    padding: 0 2px;
+    font-size: 12px;
+}
+
+.obmail-attach-remove:hover {
+    color: var(--text-error);
+}
+
+/* 附件区空态提示（常驻显示，同时引导拖放） */
+.obmail-attach-empty-hint {
+    color: var(--text-faint);
+    font-size: 12px;
+    padding: 2px 4px;
+}
+
+/* 拖拽文件进入写信页时的高亮反馈 */
+.obmail-compose.obmail-compose-dragover {
+    outline: 2px dashed var(--interactive-accent);
+    outline-offset: -4px;
+}
+
+.obmail-compose.obmail-compose-dragover .obmail-compose-attachments {
+    background: var(--background-modifier-hover);
+}
+
+.obmail-compose.obmail-compose-dragover .obmail-attach-empty-hint {
+    color: var(--interactive-accent);
+}
+
+/* 联系人选择弹窗 */
+.obmail-contact-picker .obmail-contact-filter {
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+.obmail-contact-picker .obmail-contact-list {
+    max-height: 360px;
+    overflow-y: auto;
+}
+
+.obmail-contact-item {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.obmail-contact-item:hover {
+    background: var(--background-modifier-hover);
+}

@@ -1,4 +1,34 @@
-# 📧 Obsidian Mail Plugin v1.4.0 发布说明
+# 📧 Mail as Notes（Ob-Mail）发布说明
+
+## v1.4.1（2026-09-08）—— 插件目录审查合规整改
+
+针对 Obsidian 官方插件目录自动审查结果（fix.txt）的整改。构建、tsc 类型检查（exit 0）与 31 项解析器单测均通过。
+
+**Error（阻断上架项，已全部修复）**
+- manifest：插件 ID 统一为 `ob-mail-client`；名称去除 “Obsidian” 商标改为 **Mail as Notes**；描述改写为英文并以句号结尾
+- 新增 `LICENSE`（MIT）
+- 设置页 9 处分节标题由 `createEl('h2'/'h4')` 改为 `new Setting(...).setName(...).setHeading()`；账户名标签由 `h3` 改为 `span`
+- 约 36 处内联 `style` 赋值迁移到 `styles/foxmail-email.css` 的 CSS 类
+- 邮件作用域 CSS 注入由创建 `<style>` 元素改为 `CSSStyleSheet` + `adoptedStyleSheets`
+- README 增补英文说明
+
+**Warning（尽量修复）**
+- `builtin-modules` 依赖替换为 Node 内置 `module.builtinModules`
+- 升级存在漏洞 advisory 的依赖（nodemailer/mailparser/esbuild 等）
+- `vault.trash()` → `fileManager.trashFile()`；`setTimeout` → `window.setTimeout`；`require()` → 静态 `import`
+- `prefer-create-el`：`document.createElement` → `createDiv/createSpan`
+- 移除多余正则转义与未使用变量（basePath/from/fromMatch）；tsconfig 增加 `skipLibCheck`
+
+**延期项（Warning/Recommendation，详见 docs/ANALYSIS.md）**
+- 大范围 `any` / `no-unsafe-*` / `no-explicit-any` 类型收敛
+- `console` 日志精简、floating promise 显式化
+- 声明式设置 API `getSettingDefinitions()`（1.13.0+）
+
+> 发布须将 `main.js`、`manifest.json`、`styles.css` 作为 GitHub Release 资产上传（不提交进仓库）。
+
+---
+
+# 📧 v1.4.0 发布说明
 
 ---
 

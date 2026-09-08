@@ -56,7 +56,7 @@ html-styled 模式保留邮件原始样式但用 `simpleHash` 生成每封邮件
 | 9 | **硬编码东八区** | 见 §2，跨时区用户时间错误 | 待办，改用本地时区或账户级配置 |
 | 10 | **附件全量内存化** | 见 §2，大附件风险 | 待办，可加大小上限提示或流式读取 |
 | 11 | **无搜索正则/高级筛选** | 原需求中的字段级正则搜索未实现，当前仅子串过滤 | 待办 |
-| 12 | **发布资产滞后** | `release/` 仍为 v1.0.6 包，RELEASE_NOTES 曾停留旧版本号 | 部分已修（v1.4.0 发布说明已补），重新打包待办 |
+| 12 | ~~发布资产滞后~~ | `main.js` 已由 `.gitignore` 排除（审查要求作为 GitHub Release 资产上传，不得进仓库）；发布流程已在 readme.md「发布流程」与 RELEASE_NOTES v1.4.1 说明 | **v1.4.1 已修**（文档化发布流程 + 目录改名 ob-mail-client） |
 | 13 | ~~`addStylesheet()` 手动 fs 注入样式~~ | 脆弱的 `require('fs')` 读取 styles.css 逻辑 | **v1.4.0 已修**：移除，改用 Obsidian 自动加载 |
 | 14 | ~~`require('obsidian').MarkdownView` 运行期 require~~ | 与文件顶部静态导入并存 | **v1.4.0 已修**：改用静态导入 |
 | 15 | ~~根 `readme.md` 内容为 CSS 片段，与项目脱节~~ | 文档错位 | **v1.4.0 已修**：改名保留至 `styles/README-css-snippets.md`，根 readme 重写 |
@@ -82,4 +82,48 @@ html-styled 模式保留邮件原始样式但用 `simpleHash` 生成每封邮件
 
 - `.cowork-temp/test-parse.js`：地址解析/格式化/校验/HTML 清理断言（esbuild 打包真实源码后执行），v1.4.0 补充了制表符与 Excel 两列粘贴用例；
 - `.cowork-temp/test-htmlconv.js`：HTML→Markdown 转换用例；
-- 构建验证：`npm run build` 产物输出到 `test_note/.obsidian/plugins/obsidian-mail/`，用内置 `test_note` Vault 手工回归（收发、拖拽附件、批量粘贴、回复/转发、草稿闭环）。
+- 构建验证：`npm run build` 产物输出到 `test_note/.obsidian/plugins/ob-mail-client/`（main.js + styles.css + manifest.json），用内置 `test_note` Vault 手工回归（收发、拖拽附件、批量粘贴、回复/转发、草稿闭环）。
+
+## 6. 插件目录审查合规（v1.4.1）
+
+针对 Obsidian 官方插件目录自动审查（fix.txt，基于 1.4.0 / commit 6c556d9）的整改。整改后 `npm run build`、`npx tsc --noEmit`（exit 0）、31 项解析器单测全部通过。
+
+### 6.1 已修复
+
+**Error（阻断上架，全部清零）**
+
+| 项 | 处理 |
+| --- | --- |
+| manifest ID 不一致 | 统一为 `ob-mail-client`；测试 Vault 插件目录同步改名，`community-plugins.json` 更新 |
+| 名称/描述含 "Obsidian" 商标 | 名称改 **Mail as Notes**，描述改英文并以句号结尾 |
+| 缺少 License | 新增根目录 `LICENSE`（MIT，与 package.json `license` 字段一致） |
+| README 无英文 | readme.md 顶部增补英文简介段落 |
+| 直接创建标题元素（9 处） | 设置页分节标题改 `new Setting(el).setName(...).setHeading()`；账户名 `h3` 改 `span`（非标题元素，配 `.mail-account-name` 字重） |
+| 内联 style 赋值（~36 处） | 全部迁移到 `styles/foxmail-email.css` 的 CSS 类；折叠改用 `is-expanded`/`is-hidden` 类切换 |
+| 创建 `<style>` 元素 | 邮件作用域 CSS 改用 `CSSStyleSheet` + `document.adoptedStyleSheets`（幂等 replaceSync，不建 style 节点） |
+| Release 缺 main.js/manifest.json 资产 | 文档化发布流程（资产上传，不入库） |
+
+**Warning（低成本项已修）**
+
+- `builtin-modules` → Node 内置 `module.builtinModules`（esbuild.config.js 与测试脚手架同步）；
+- 依赖漏洞：升级 `nodemailer`/`mailparser`/`esbuild` 到 advisory 范围外版本（esbuild 因移除 `watch` 选项改用 context API）；
+- `vault.trash()` → `fileManager.trashFile()`；`setTimeout` → `window.setTimeout`；`require('net'/'proxy-agent')` → 顶部静态 `import`；
+- `prefer-create-el`：`document.createElement('div')` → `createDiv`，弹窗按钮行/容器改 `createDiv`；
+- 移除多余正则转义（`\"`、字符类内 `\/`）与未使用变量（`basePath`/`from`/`fromMatch`）；
+- tsconfig 增 `skipLibCheck`（消除静态导入 proxy-agent 后 node_modules 内 .d.ts 的连带报错）。
+
+### 6.2 延期项（非阻断 Warning，附理由）
+
+这些均为审查的 **Warning/Recommendation**，不阻断上架；修复面大或需权衡，故记录延后：
+
+| 类别 | 规模 | 延期理由 |
+| --- | --- | --- |
+| `no-explicit-any` / `no-unsafe-*`（argument/assignment/member-access/call/return） | 数百处 | 根因是 `imap`/`mailparser`/`nodemailer` 无类型 + `(app as any).secretStorage`/`processFrontMatter` 等历史写法；需为三大依赖补 `.d.ts` 或整体类型化，属大重构，回归风险高 |
+| `no-console`（调试日志） | 数十处 | 见债务 #3，应随「日志分级开关」一并治理，而非逐行删 |
+| floating promise / promise-in-void | 数十处 | 多为事件回调内 `await`，逐个加 `void`/`.catch` 需确认每处错误处理语义，宜随模块拆分推进 |
+| `prefer-promise-reject-errors` | 数处 | imap 回调 `reject(err)` 的 `err` 为 `any`，随依赖类型化一并收敛 |
+| `getSettingDefinitions()`（声明式设置 API） | 1 处 | 面向 1.13.0+ 的设置搜索，需把整页设置重写为声明式定义，工作量独立且较大 |
+| `async onload()` 返回 Promise | 1 处 | Obsidian 官方 sample-plugin 亦用 `async onload()`，属可接受惯例 |
+| `password` @deprecated 明文字段 | 2 处 | 有意保留以兼容旧数据（见 §1.4），非缺陷 |
+
+> 结论：阻断上架的 **Error 已全部清零**，可直接重新提交审查；上表 Warning 属代码质量演进项，建议纳入第二/三阶段的结构治理一并偿还。

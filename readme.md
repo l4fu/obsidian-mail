@@ -1,9 +1,11 @@
-# Ob-Mail —— Obsidian 邮件客户端插件（Foxmail 风格）
+# Mail as Notes（Ob-Mail）—— Obsidian 邮件客户端插件（Foxmail 风格）
+
+> **English**: Mail as Notes is a desktop-only email client plugin for your vault. It sends and receives email via IMAP/SMTP and stores every message as a plain Markdown note with YAML frontmatter, so your mail becomes fully searchable, linkable and part of your knowledge base. It features multi-account setup with Keychain password storage, a classic Foxmail-style three-pane mail view (folder tree / message list / reading pane), a tab-based composer with drag-and-drop attachments, batch-paste recipients, contact autocomplete, drafts, reply/forward/spam actions, and safe scoped-CSS rendering of HTML emails.
 
 在 Obsidian 中收发邮件的桌面端插件。核心理念：**每一封邮件都是一条 Markdown 笔记**——收取的邮件解析为带 frontmatter 的 Markdown 文件存入 Vault，天然融入 Obsidian 的双链、搜索与知识管理体系；同时提供 Foxmail 风格的三栏邮件视图与标签页式写信界面，兼顾传统邮件客户端的操作习惯。
 
-- 插件 ID：`obsidian-mail`
-- 当前版本：**1.4.0**（变更见 [RELEASE_NOTES.md](RELEASE_NOTES.md)）
+- 插件 ID：`ob-mail-client`（插件名：**Mail as Notes**）
+- 当前版本：**1.4.1**（变更见 [RELEASE_NOTES.md](RELEASE_NOTES.md)）
 - 界面视图：Foxmail 三栏视图（账户/文件夹树 + 邮件列表 + 阅读窗格）
 
 ## 功能清单
@@ -31,16 +33,16 @@
 
 ### 方式一：从发布包安装
 
-1. 下载发布包（如 `release/obsidian-mail-v1.4.0.zip`，见 [RELEASE_NOTES.md](RELEASE_NOTES.md) 安装说明）；
-2. 解压后将插件目录放入你的 Vault：`{Vault}/.obsidian/plugins/obsidian-mail/`，目录内应包含 `main.js`、`manifest.json`、`styles.css`；
-3. 在 Obsidian「设置 → 第三方插件」中启用 **Ob-Mail**。
+1. 下载发布包（见 [RELEASE_NOTES.md](RELEASE_NOTES.md) 安装说明）；
+2. 解压后将插件目录放入你的 Vault：`{Vault}/.obsidian/plugins/ob-mail-client/`，目录内应包含 `main.js`、`manifest.json`、`styles.css`；
+3. 在 Obsidian「设置 → 第三方插件」中启用 **Mail as Notes**。
 
 ### 方式二：从源码构建
 
 ```powershell
 cd obsidian-mail
 npm install
-npm run build      # 生产构建，产物输出到 ./test_note/.obsidian/plugins/obsidian-mail/
+npm run build      # 生产构建，产物输出到 ./test_note/.obsidian/plugins/ob-mail-client/
 npm run dev        # 开发模式（esbuild watch）
 ```
 
@@ -48,7 +50,7 @@ npm run dev        # 开发模式（esbuild watch）
 
 ## 快速开始
 
-1. 「设置 → Ob-Mail」中点击 **添加邮件账户**，填写邮箱、IMAP/SMTP 服务器与端口、用户名，在「密码/授权码」处从 Keychain 选择或新建密钥；
+1. 「设置 → Mail as Notes」中点击 **添加邮件账户**，填写邮箱、IMAP/SMTP 服务器与端口、用户名，在「密码/授权码」处从 Keychain 选择或新建密钥；
 2. 点击 **测试 IMAP / 测试 SMTP** 验证配置；
 3. 执行命令 **打开邮件客户端（Foxmail 风格）**（或命令面板搜索「收取邮件」）收取第一批邮件；
 4. 工具栏点击 **写邮件** 开始发送：支持联系人补全、批量粘贴收件人、拖拽文件添加附件；
@@ -92,3 +94,13 @@ obsidian-mail/
 | 收取邮件 | 手动收取所有账户新邮件 |
 | 重新收取邮件（重新解析已下载邮件） | 强制重新解析，用于修复解析问题 |
 | 回复邮件 / 回复全部邮件 / 转发邮件 / 作为附件转发邮件 / 标记为垃圾邮件 | 针对当前活动邮件笔记的操作 |
+
+## 发布流程（GitHub Release）
+
+插件目录审查要求 `main.js` 作为 Release 资产上传，**不得提交到仓库**（`.gitignore` 已排除）：
+
+1. `npm run build` 生成产物（`test_note/.obsidian/plugins/ob-mail-client/` 下的 `main.js` 与 `styles.css`）；
+2. 确认 `manifest.json` 的 `version` 与即将发布的 tag 一致；
+3. 在 GitHub 创建 Release：tag 与名称均使用版本号（如 `1.4.1`），并填写变更说明；
+4. 上传三个资产：`main.js`、`manifest.json`、`styles.css`（不要上传 zip 或其他额外文件）；
+5. 提交仓库变更（源码 + manifest），插件目录会自动重新审查。

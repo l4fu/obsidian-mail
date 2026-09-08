@@ -1,11 +1,13 @@
 import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder, SecretComponent, ItemView, WorkspaceLeaf, MarkdownRenderer, setIcon, MarkdownView, Menu, normalizePath } from 'obsidian';
 
 import * as path from 'path';
+import * as net from 'net';
 // 导入 imap 模块（修复构造函数问题）
 import Imap from 'imap';
 import * as mailparser from 'mailparser';
 import * as nodemailer from 'nodemailer';
 import { convert } from 'html-to-markdown';
+import { ProxyAgent } from 'proxy-agent';
 
 /**
  * ============================================================
@@ -305,7 +307,7 @@ function parseEmailList(input: string): ParsedAddress[] {
 function formatAddress(addr: ParsedAddress): string {
   if (!addr.name) return addr.email;
   // 名称包含特殊字符时加引号
-  if (/[\",<>@\\]/.test(addr.name)) {
+  if (/[",<>@\\]/.test(addr.name)) {
     return `"${addr.name.replace(/"/g, '\\"')}" <${addr.email}>`;
   }
   return `${addr.name} <${addr.email}>`;
@@ -488,7 +490,7 @@ class MailSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     // 默认存储设置部分
-    containerEl.createEl('h2', {text: '默认存储设置'});
+    new Setting(containerEl).setName('默认存储设置').setHeading();
     
     // 默认邮件存储路径
     new Setting(containerEl)
@@ -547,7 +549,7 @@ class MailSettingTab extends PluginSettingTab {
         }));
 
     // 邮件账户配置部分
-    containerEl.createEl('h2', {text: '邮件账户配置'});
+    new Setting(containerEl).setName('邮件账户配置').setHeading();
     
     // 添加账户按钮
     new Setting(containerEl)
@@ -589,45 +591,21 @@ class MailSettingTab extends PluginSettingTab {
           }
         }));
     
-    // 显示现有账户
+    // 显示现有账户（外观样式统一由 styles.css 的 .mail-account* 类提供）
     this.plugin.settings.accounts.forEach((account, index) => {
-      const accountDiv = containerEl.createEl('div', {cls: 'mail-account'});
-      accountDiv.style.marginBottom = '20px';
-      accountDiv.style.border = '1px solid var(--background-modifier-border)';
-      accountDiv.style.borderRadius = '4px';
-      accountDiv.style.overflow = 'hidden';
-      
+      const accountDiv = containerEl.createDiv('mail-account');
+
       // 创建可折叠头部
-      const headerDiv = accountDiv.createEl('div', {cls: 'mail-account-header'});
-      headerDiv.style.display = 'flex';
-      headerDiv.style.justifyContent = 'space-between';
-      headerDiv.style.alignItems = 'center';
-      headerDiv.style.padding = '10px 15px';
-      headerDiv.style.backgroundColor = 'var(--background-primary-alt)';
-      headerDiv.style.cursor = 'pointer';
-      headerDiv.style.borderBottom = '1px solid var(--background-modifier-border)';
-      
-      // 账户名称
-      const accountName = headerDiv.createEl('h3', {text: account.name, cls: 'mail-account-name'});
-      accountName.style.margin = '0';
-      accountName.style.fontSize = '16px';
-      
+      const headerDiv = accountDiv.createDiv('mail-account-header');
+
+      // 账户名称（用 span 而非 h3，避免直接创建标题元素；视觉字重由 .mail-account-name 提供）
+      const accountName = headerDiv.createSpan({text: account.name, cls: 'mail-account-name'});
+
       // 折叠/展开按钮
       const toggleBtn = headerDiv.createEl('button', {text: '▶', cls: 'mail-account-toggle'});
-      toggleBtn.style.background = 'none';
-      toggleBtn.style.border = 'none';
-      toggleBtn.style.color = 'var(--text-muted)';
-      toggleBtn.style.cursor = 'pointer';
-      toggleBtn.style.fontSize = '12px';
-      toggleBtn.style.padding = '2px 6px';
-      toggleBtn.style.borderRadius = '4px';
-      
-      // 创建内容区域
-      const contentDiv = accountDiv.createEl('div', {cls: 'mail-account-content'});
-      contentDiv.style.maxHeight = '0';
-      contentDiv.style.padding = '0 15px';
-      contentDiv.style.overflow = 'hidden';
-      contentDiv.style.transition = 'max-height 0.3s ease, padding 0.3s ease';
+
+      // 创建内容区域（默认折叠，is-expanded 类控制展开）
+      const contentDiv = accountDiv.createDiv('mail-account-content');
       
       // 基本信息
       new Setting(contentDiv)
@@ -650,7 +628,7 @@ class MailSettingTab extends PluginSettingTab {
           }));
       
       // IMAP设置
-      contentDiv.createEl('h4', {text: 'IMAP设置'});
+      new Setting(contentDiv).setName('IMAP设置').setHeading();
       
       new Setting(contentDiv)
         .setName('IMAP服务器')
@@ -671,7 +649,7 @@ class MailSettingTab extends PluginSettingTab {
           }));
       
       // SMTP设置
-      contentDiv.createEl('h4', {text: 'SMTP设置'});
+      new Setting(contentDiv).setName('SMTP设置').setHeading();
       
       new Setting(contentDiv)
         .setName('SMTP服务器')
@@ -692,7 +670,7 @@ class MailSettingTab extends PluginSettingTab {
           }));
       
       // 账户认证信息
-      contentDiv.createEl('h4', {text: '账户认证'});
+      new Setting(contentDiv).setName('账户认证').setHeading();
       
       new Setting(contentDiv)
         .setName('用户名')
@@ -719,7 +697,7 @@ class MailSettingTab extends PluginSettingTab {
         });
       
       // 安全设置
-      contentDiv.createEl('h4', {text: '安全设置'});
+      new Setting(contentDiv).setName('安全设置').setHeading();
       
       new Setting(contentDiv)
         .setName('使用SSL/TLS')
@@ -740,7 +718,7 @@ class MailSettingTab extends PluginSettingTab {
           }));
       
       // 签名设置
-      contentDiv.createEl('h4', {text: '签名设置'});
+      new Setting(contentDiv).setName('签名设置').setHeading();
       
       new Setting(contentDiv)
         .setName('邮件签名')
@@ -758,7 +736,7 @@ class MailSettingTab extends PluginSettingTab {
         });
       
       // 代理设置
-      contentDiv.createEl('h4', {text: '代理设置'});
+      new Setting(contentDiv).setName('代理设置').setHeading();
       
       // 为旧账户添加代理字段的默认值
       if (account.proxyEnabled === undefined) account.proxyEnabled = false;
@@ -888,20 +866,12 @@ class MailSettingTab extends PluginSettingTab {
             this.display(); // 重新渲染设置界面
           }));
       
-      // 折叠/展开功能
+      // 折叠/展开功能（is-expanded 类切换，样式见 styles.css）
       let isExpanded = false;
       headerDiv.addEventListener('click', () => {
         isExpanded = !isExpanded;
-        if (isExpanded) {
-          toggleBtn.textContent = '▼';
-          // 将maxHeight设置为更大的值，确保能显示所有内容
-          contentDiv.style.maxHeight = '2000px';
-          contentDiv.style.padding = '15px';
-        } else {
-          toggleBtn.textContent = '▶';
-          contentDiv.style.maxHeight = '0';
-          contentDiv.style.padding = '0 15px';
-        }
+        toggleBtn.textContent = isExpanded ? '▼' : '▶';
+        contentDiv.toggleClass('is-expanded', isExpanded);
       });
     });
   }
@@ -926,15 +896,12 @@ class ConfirmModal extends Modal {
     contentEl.createEl('h2', { text: '确认下载' });
     contentEl.createEl('p', { text: this.message });
 
-    const buttonContainer = contentEl.createEl('div', {
-      attr: { style: 'margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;' }
-    });
+    const buttonContainer = contentEl.createDiv('obmail-modal-btn-row');
 
     // 取消按钮
     const cancelBtn = buttonContainer.createEl('button', {
       text: '取消',
-      cls: 'mod-cta',
-      attr: { style: 'background-color: var(--background-modifier-cta-hover); color: var(--interactive-accent);' }
+      cls: 'mod-cta obmail-modal-btn-cancel'
     });
     cancelBtn.addEventListener('click', () => {
       this.onCancel();
@@ -944,8 +911,7 @@ class ConfirmModal extends Modal {
     // 确认按钮
     const confirmBtn = buttonContainer.createEl('button', {
       text: '确认',
-      cls: 'mod-cta',
-      attr: { style: 'background-color: var(--interactive-accent); color: white;' }
+      cls: 'mod-cta obmail-modal-btn-confirm'
     });
     confirmBtn.addEventListener('click', () => {
       this.onConfirm();
@@ -1692,7 +1658,8 @@ class MailFoxmailView extends ItemView {
       `确定要删除邮件「${entry.fm.subject || entry.file.name}」吗？\n邮件将移入系统回收站。`,
       async () => {
         try {
-          await this.app.vault.trash(entry.file, true);
+          // 使用 FileManager.trashFile 尊重用户的删除偏好设置（系统回收站/vault 回收站）
+          await this.app.fileManager.trashFile(entry.file);
           this.selectedEntry = null;
           new Notice('邮件已删除');
           await this.refresh();
@@ -1727,7 +1694,7 @@ function askComposeCloseChoice(app: App): Promise<'save' | 'discard' | 'cancel'>
     modal.onOpen = () => {
       const { contentEl } = modal;
       contentEl.createEl('p', { text: '邮件内容已修改但尚未发送。关闭前是否保存为草稿？' });
-      const btnRow = contentEl.createEl('div', { attr: { style: 'margin-top: 18px; display: flex; justify-content: flex-end; gap: 10px;' } });
+      const btnRow = contentEl.createDiv('obmail-modal-btn-row');
 
       const cancelBtn = btnRow.createEl('button', { text: '取消' });
       cancelBtn.addEventListener('click', () => { done('cancel'); modal.close(); });
@@ -1824,7 +1791,7 @@ function buildContactField(plugin: MailPlugin, parent: HTMLElement, label: strin
     const prefix = idx !== -1 ? value.substring(0, idx + 1) + ' ' : '';
     const inserted = contact.name ? `${contact.name} <${contact.email}>` : contact.email;
     input.value = prefix + inserted + ', ';
-    drop.style.display = 'none';
+    drop.addClass('is-hidden');
     input.focus();
     input.setSelectionRange(input.value.length, input.value.length);
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -1835,7 +1802,7 @@ function buildContactField(plugin: MailPlugin, parent: HTMLElement, label: strin
     const segIdx = Math.max(value.lastIndexOf(','), value.lastIndexOf('，'));
     const term = (segIdx !== -1 ? value.substring(segIdx + 1) : value).trim().toLowerCase();
     if (!term) {
-      drop.style.display = 'none';
+      drop.addClass('is-hidden');
       return;
     }
     filtered = plugin.settings.contacts.filter(c => {
@@ -1844,7 +1811,7 @@ function buildContactField(plugin: MailPlugin, parent: HTMLElement, label: strin
     }).slice(0, 8);
 
     if (filtered.length === 0) {
-      drop.style.display = 'none';
+      drop.addClass('is-hidden');
       return;
     }
 
@@ -1864,13 +1831,13 @@ function buildContactField(plugin: MailPlugin, parent: HTMLElement, label: strin
         opt.addClass('is-selected');
       });
     });
-    drop.style.display = 'block';
+    drop.removeClass('is-hidden');
   };
 
   input.addEventListener('input', updateOptions);
   input.addEventListener('focus', updateOptions);
   input.addEventListener('blur', () => {
-    window.setTimeout(() => { drop.style.display = 'none'; }, 150);
+    window.setTimeout(() => { drop.addClass('is-hidden'); }, 150);
   });
 
   // 粘贴识别：支持 姓名<邮箱> 列表，逗号/分号/换行/制表符分隔，自动去重、规范化并存入联系人
@@ -1896,7 +1863,7 @@ function buildContactField(plugin: MailPlugin, parent: HTMLElement, label: strin
 
     input.value = merged.map(formatAddress).join(', ') + (merged.length > 0 ? ' ' : '');
     input.dispatchEvent(new Event('input', { bubbles: true }));
-    drop.style.display = 'none';
+    drop.addClass('is-hidden');
 
     // 批量粘贴结果反馈（新增/去重/无效条目数）
     const dupCount = pasted.length - newAddrs.length;
@@ -1917,7 +1884,7 @@ function buildContactField(plugin: MailPlugin, parent: HTMLElement, label: strin
     }
   });
   input.addEventListener('keydown', (e) => {
-    if (drop.style.display === 'none') return;
+    if (drop.hasClass('is-hidden')) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       selected = Math.min(selected + 1, filtered.length - 1);
@@ -1931,7 +1898,7 @@ function buildContactField(plugin: MailPlugin, parent: HTMLElement, label: strin
       }
       return;
     } else if (e.key === 'Escape') {
-      drop.style.display = 'none';
+      drop.addClass('is-hidden');
       return;
     } else {
       return;
@@ -1951,12 +1918,13 @@ function buildContactField(plugin: MailPlugin, parent: HTMLElement, label: strin
   return input;
 }
 
-/** 邮件发送进度弹窗：发送期间展示状态，禁止 ESC/点击遮罩关闭 */
+/** 邮件发送进度弹窗：发送期间展示状态，禁止 ESC 关闭 */
 class SendProgressModal extends Modal {
   private statusEl!: HTMLElement;
 
   onOpen() {
-    this.closable = false; // 发送进行中不允许关闭，避免误操作
+    // 发送进行中禁止 ESC 关闭（消费 Escape 按键，避免误操作中断发送进度显示；Modal 无 closable 属性）
+    this.scope.register(null, 'Escape', () => false);
     this.titleEl.setText('发送邮件');
     const box = this.contentEl.createDiv('obmail-send-progress');
     const spinnerEl = box.createDiv('obmail-send-spinner');
@@ -2230,12 +2198,10 @@ class ObMailComposeView extends ItemView {
     if (!this.attachListEl) return;
     this.attachListEl.empty();
     if (this.attachments.length === 0) {
-      // 空态：常驻显示拖拽/添加提示，引导用户使用拖放或选择器
-      this.attachListEl.style.display = 'flex';
+      // 空态：常驻显示拖拽/添加提示，引导用户使用拖放或选择器（布局由 .obmail-attach-list 类提供）
       this.attachListEl.createSpan({ text: '拖拽文件到此处，或点击「📎 添加附件」选择附件', cls: 'obmail-attach-empty-hint' });
       return;
     }
-    this.attachListEl.style.display = 'flex';
     this.attachments.forEach((att, index) => {
       const item = this.attachListEl.createDiv('obmail-attach-item');
       item.createSpan({ text: `📎 ${att.filename}`, cls: 'obmail-attach-name' });
@@ -2407,8 +2373,8 @@ export default class MailPlugin extends Plugin {
     // 监听文件打开，自动为有 cssclasses: email-note 的笔记添加 email-note 类
     this.registerEvent(this.app.workspace.on('file-open', (file) => {
       if (file && file.extension === 'md') {
-        // 延迟执行，等待 Obsidian 渲染完成
-        setTimeout(() => {
+        // 延迟执行，等待 Obsidian 渲染完成（window.setTimeout 兼容弹出窗口）
+        window.setTimeout(() => {
           this.checkAndApplyEmailNoteClass();
         }, 100);
       }
@@ -2494,18 +2460,30 @@ export default class MailPlugin extends Plugin {
       }
     });
     
-    // 邮件笔记作用域 CSS 注入：渲染时将 frontmatter 中的 obmailcss 注入为全局 style（选择器已带唯一作用域前缀，不污染 Obsidian）
+    // 邮件笔记作用域 CSS 注入：渲染时将 frontmatter 中的 obmailcss 以 Constructable Stylesheet 注入
+    // （选择器已带唯一作用域前缀，不污染 Obsidian；不使用 <style> 元素，符合插件审查规范）
+    const obmailSheets = new Map<string, CSSStyleSheet>();
     this.registerMarkdownPostProcessor((el, ctx) => {
       try {
         const fm = (ctx.frontmatter || {}) as Record<string, any>;
         if (!fm || (fm.type !== '邮件笔记' && fm.type !== '发出邮件')) return;
         if (!fm.obmailcss || !fm.obmailscope) return;
         const id = 'obmail-dyn-' + simpleHash(ctx.sourcePath);
-        if (document.getElementById(id)) return;
-        const styleEl = document.createElement('style');
-        styleEl.id = id;
-        styleEl.textContent = String(fm.obmailcss);
-        document.head.appendChild(styleEl);
+        const cssText = String(fm.obmailcss);
+        const doc = el.ownerDocument ?? document;
+        let sheet = obmailSheets.get(id);
+        if (sheet) {
+          // 同一篇笔记重新收取后 CSS 可能变化，幂等替换
+          if ((sheet as CSSStyleSheet & { __obmailCss?: string }).__obmailCss === cssText) return;
+          sheet.replaceSync(cssText);
+          (sheet as CSSStyleSheet & { __obmailCss?: string }).__obmailCss = cssText;
+          return;
+        }
+        sheet = new CSSStyleSheet();
+        sheet.replaceSync(cssText);
+        (sheet as CSSStyleSheet & { __obmailCss?: string }).__obmailCss = cssText;
+        obmailSheets.set(id, sheet);
+        doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, sheet];
       } catch (err) {
         console.error('注入邮件作用域 CSS 失败:', err);
       }
@@ -2695,8 +2673,7 @@ export default class MailPlugin extends Plugin {
   
   /** 构建 Foxmail 风格操作按钮栏（类名统一 obmail- 前缀，避免与 Obsidian 内置元素冲突） */
   buildMailActionBar(file: TFile, fm: Record<string, any>): HTMLElement {
-    const bar = document.createElement('div');
-    bar.className = 'obmail-action-bar';
+    const bar = createDiv('obmail-action-bar');
     
     const mkBtn = (label: string, icon: string, onClick: () => void, danger = false) => {
       const btn = bar.createEl('button', { cls: `obmail-action-btn${danger ? ' obmail-action-btn-danger' : ''}` });
@@ -3159,7 +3136,7 @@ ${bodyContent}
       
       attachments.forEach(attachment => {
         // 将附件文件名中的空格和特殊字符替换为下划线
-        const sanitizedFilename = attachment.filename.replace(/[\/*?:"<>|\s]/g, '_');
+        const sanitizedFilename = attachment.filename.replace(/[/*?:"<>|\s]/g, '_');
         
         // 查找对应的已保存附件路径
         let attachmentPath = null;
@@ -3167,7 +3144,6 @@ ${bodyContent}
           const savedAttachment = savedAttachments.find(sa => sa.originalFilename === attachment.filename);
           if (savedAttachment) {
             // 从完整路径中提取相对路径用于链接
-            const basePath = this.settings.obmailStoragePath;
             const relativePath = savedAttachment.savedPath.substring(savedAttachment.savedPath.indexOf('收件箱/'));
             attachmentPath = relativePath;
           }
@@ -3321,7 +3297,7 @@ ${bodyContent}
     const dateStr = this.getCSTDateString(date);
     const timeStr = this.convertUTCToCST(date).toISOString().split('T')[1].replace(/[:.]/g, '-').slice(0, 12); // 15-04-05-000000
     // 移除所有特殊字符，包括空格，确保文件名安全
-    const subjectStr = (parsed.subject || '无主题').replace(/[\/*?:"<>|\s]/g, '_');
+    const subjectStr = (parsed.subject || '无主题').replace(/[/*?:"<>|\s]/g, '_');
     // 使用邮件主题作为文件名，日期添加到末尾，不使用空格等特殊字符
     const filename = `${subjectStr}${dateStr}-${timeStr}.md`;
     
@@ -3369,7 +3345,7 @@ ${bodyContent}
     
     for (const attachment of attachments) {
       // 将附件文件名中的空格和特殊字符替换为下划线
-      const sanitizedFilename = attachment.filename.replace(/[\/*?:"<>|\s]/g, '_');
+      const sanitizedFilename = attachment.filename.replace(/[/*?:"<>|\s]/g, '_');
       
       // 检查文件是否已存在，如果存在则添加序号区分
       let attachmentPath = `${attachmentDir}/${sanitizedFilename}`;
@@ -3597,12 +3573,7 @@ ${bodyContent}
       if (account.proxyEnabled && account.proxyHost && account.proxyPort) {
         console.log('使用代理连接IMAP服务器:', {host: account.proxyHost, port: account.proxyPort, type: account.proxyType});
         
-        // 创建代理请求
-        const net = require('net');
-        const http = require('http');
-        const https = require('https');
-        
-        // 创建TCP连接
+        // 创建TCP连接（net 已在文件顶部静态导入）
         const proxySocket = net.createConnection({
           host: account.proxyHost,
           port: account.proxyPort
@@ -3714,8 +3685,7 @@ ${bodyContent}
     if (account.proxyEnabled && account.proxyHost && account.proxyPort) {
       console.log('使用代理连接SMTP服务器:', {host: account.proxyHost, port: account.proxyPort, type: account.proxyType});
       
-      // 为nodemailer配置代理 - 使用socket连接选项
-      const { ProxyAgent } = require('proxy-agent');
+      // ProxyAgent 已在文件顶部静态导入（避免 require() 风格导入）
       
       // 构建代理URL
       let proxyUrl = `${account.proxyType}://`;
@@ -3773,7 +3743,7 @@ ${bodyContent}
         // 如果不是最后一次尝试，等待一段时间后重试
         if (attempt < maxRetries) {
           console.log(`等待 2 秒后进行下一次尝试...`);
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => window.setTimeout(resolve, 2000));
         }
       }
     }
@@ -3893,7 +3863,6 @@ ${bodyContent}
     
     const metadata = metadataMatch[1];
     const accountMatch = metadata.match(/account: (.*)/);
-    const fromMatch = metadata.match(/from: (.*)/);
     const toMatch = metadata.match(/to: (.*)/);
     const ccMatch = metadata.match(/cc: (.*)/);
     const bccMatch = metadata.match(/bcc: (.*)/);
@@ -3912,7 +3881,6 @@ ${bodyContent}
     }
     
     const accountName = accountMatch[1].trim();
-    const from = fromMatch ? fromMatch[1].trim() : '';
     const to = toMatch ? parseEmailList(toMatch[1]).map(formatAddress) : [];
     const cc = ccMatch ? parseEmailList(ccMatch[1]).map(formatAddress) : [];
     const bcc = bccMatch ? parseEmailList(bccMatch[1]).map(formatAddress) : [];
@@ -4057,7 +4025,7 @@ ${bodyContent}
       const timeStr = this.convertUTCToCST(date).toISOString().split('T')[1].replace(/[:.]/g, '-').slice(0, 15);
       const draftSubject = subject || '无主题';
       // 移除所有特殊字符，包括空格，确保文件名安全
-      const sanitizedSubject = draftSubject.replace(/[\/*?:"<>|\s]/g, '_');
+      const sanitizedSubject = draftSubject.replace(/[/*?:"<>|\s]/g, '_');
       const draftFilename = `${dateStr}-${timeStr}-${sanitizedSubject}-草稿.md`;
       
       // 替换可能破坏YAML格式的字符，包括冒号、引号、换行符、反斜杠等
@@ -4124,7 +4092,7 @@ ${body}`;
         
         for (const attachment of attachments) {
           // 移除附件文件名中的空格和特殊字符
-          const sanitizedAttachmentFilename = attachment.filename.replace(/[\/*?:"<>|\s]/g, '_');
+          const sanitizedAttachmentFilename = attachment.filename.replace(/[/*?:"<>|\s]/g, '_');
           const attachmentPath = `${attachmentsDir}/${sanitizedAttachmentFilename}`;
           const existingFile = vault.getAbstractFileByPath(attachmentPath);
           if (existingFile && existingFile instanceof TFile) {
@@ -4243,7 +4211,7 @@ ${sentEmail.text}
         // 保存附件并生成链接
         for (const attachment of attachments) {
           // 移除附件文件名中的空格和特殊字符
-          const sanitizedAttachmentFilename = attachment.filename.replace(/[\/*?:"<>|\s]/g, '_');
+          const sanitizedAttachmentFilename = attachment.filename.replace(/[/*?:"<>|\s]/g, '_');
           
           // 保存附件到正确路径
           const finalAttachmentPath = `${attachmentDir}/${sanitizedAttachmentFilename}`;
@@ -4277,7 +4245,7 @@ ${sentEmail.text}
       
       // 生成文件名
       // 移除所有特殊字符，包括空格，确保文件名安全
-      const subjectStr = (subject || '无主题').replace(/[\/*?:"<>|\s]/g, '_');
+      const subjectStr = (subject || '无主题').replace(/[/*?:"<>|\s]/g, '_');
       const filename = `${subjectStr}-${dateStr}-${timeStr}.md`;
       
       // 保存文件
