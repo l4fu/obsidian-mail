@@ -101,7 +101,7 @@ html-styled 模式保留邮件原始样式但用 `simpleHash` 生成每封邮件
 | 直接创建标题元素（9 处） | 设置页分节标题改 `new Setting(el).setName(...).setHeading()`；账户名 `h3` 改 `span`（非标题元素，配 `.mail-account-name` 字重） |
 | 内联 style 赋值（~36 处） | 全部迁移到 `styles/foxmail-email.css` 的 CSS 类；折叠改用 `is-expanded`/`is-hidden` 类切换 |
 | 创建 `<style>` 元素 | 邮件作用域 CSS 改用 `CSSStyleSheet` + `document.adoptedStyleSheets`（幂等 replaceSync，不建 style 节点） |
-| Release 缺 main.js/manifest.json 资产 | 文档化发布流程（资产上传，不入库） |
+| Release 缺 main.js/manifest.json 资产 | 发布自动化：`.github/workflows/release.yml`（见 6.3） |
 
 **Warning（低成本项已修）**
 
@@ -127,3 +127,13 @@ html-styled 模式保留邮件原始样式但用 `simpleHash` 生成每封邮件
 | `password` @deprecated 明文字段 | 2 处 | 有意保留以兼容旧数据（见 §1.4），非缺陷 |
 
 > 结论：阻断上架的 **Error 已全部清零**，可直接重新提交审查；上表 Warning 属代码质量演进项，建议纳入第二/三阶段的结构治理一并偿还。
+
+### 6.3 二次审查修复（2026-09-09，commit 9d58b3b）
+
+第二轮审查仅剩 Release 资产类 Error（需发布动作，已由 Action 自动化），其余新增告警均已在源码侧清零：
+
+- **manifest 移除未知字段 `repo`**：插件目录的仓库信息由 obsidian-releases 侧维护，manifest 内为未知字段；
+- **README 更名 `README.md`（大写）**：审查脚本按该文件名读取英文说明，此前小写 `readme.md` 未被识别（内容本身已含英文段落）；
+- **CSS lint**：移除 2 处 `!important`（选择器特异性已足够）与 11 处 `:has()`——编辑器标题行 `:has(.cm-header-1)` 改为等价类 `.HyperMD-header-1`；附件卡片网格/列表缩进/mailto 段落背景等装饰规则删除（附件在预览页回退普通列表；自定义三栏视图本就不命中 email-note 作用域，不受影响）；
+- **依赖漏洞**：`npm overrides` 将 `utf7`（imap 传递依赖）的 `semver` 固定 5.7.2，避免 audit 建议的 breaking 降级；
+- **发布自动化**：新增 `.github/workflows/release.yml`，推送 tag 即执行 `npm ci` → `npm run build` → `gh release create`（上传 main.js/manifest.json/styles.css）。为此 github 发布仓库的 `esbuild.config.js` 与开发副本**有意分叉**：生产构建输出仓库根 `main.js` + `styles.css`（已入 .gitignore），开发副本仍输出 `test_note/` 测试 Vault。

@@ -1,11 +1,10 @@
 {
   "id": "ob-mail-client",
   "name": "Mail as Notes",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "minAppVersion": "1.11.4",
   "description": "Send and receive email as Markdown notes in your vault. Features IMAP/SMTP accounts, Keychain password storage, a classic three-pane mail view, drag-and-drop attachments, and safe scoped-CSS HTML rendering.",
   "author": "l4fu",
   "authorUrl": "https://github.com/l4fu",
-  "isDesktopOnly": true,
-  "repo": "l4fu/obsidian-mail"
+  "isDesktopOnly": true
 }

@@ -62,9 +62,9 @@
 
 /* 邮件主题标题 - 仅在 email-note 内生效 */
 [data-property-cssclasses*="email-note"] .markdown-preview-view h1:first-of-type,
-[data-property-cssclasses*="email-note"] .cm-line:has(.cm-header-1):first-of-type {
+[data-property-cssclasses*="email-note"] .HyperMD-header-1:first-of-type {
     background: var(--mail-header-bg);
-    color: #ffffff !important;
+    color: #ffffff;
     padding: 16px 20px;
     border-radius: 8px 8px 0 0;
     margin: 0;
@@ -83,14 +83,7 @@
     line-height: 1.6;
 }
 
-/* 针对包含邮箱链接的段落 */
-[data-property-cssclasses*="email-note"] .markdown-preview-view p:has(a[href^="mailto:"]) {
-    background-color: var(--mail-bg-secondary);
-    border-left: 4px solid var(--mail-accent-blue);
-    padding: 12px 16px;
-    margin: 8px 0;
-    color: var(--mail-text-secondary);
-}
+/* （原「含 mailto 链接段落」样式依赖父级选择器判定，按插件审查 CSS lint 建议移除） */
 
 /* ====================================
    发件人/收件人信息显示优化
@@ -170,7 +163,7 @@
 
 /* 代码块样式 - 仅在 email-note 内 */
 [data-property-cssclasses*="email-note"] .markdown-preview-view pre {
-    background-color: var(--mail-bg-secondary) !important;
+    background-color: var(--mail-bg-secondary);
     border: 1px solid var(--mail-border-color);
     border-radius: 6px;
     padding: 12px;
@@ -221,40 +214,7 @@
     font-weight: 600;
 }
 
-[data-property-cssclasses*="email-note"] .markdown-preview-view ul:has(a[href*="附件"]),
-[data-property-cssclasses*="email-note"] .markdown-preview-view ul:has(a[href*="attachment"]) {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 12px;
-    list-style: none;
-    padding: 0;
-}
-
-[data-property-cssclasses*="email-note"] .markdown-preview-view ul:has(a[href*="附件"]) li,
-[data-property-cssclasses*="email-note"] .markdown-preview-view ul:has(a[href*="attachment"]) li {
-    background-color: var(--mail-bg-secondary);
-    border: 1px solid var(--mail-border-color);
-    border-radius: 6px;
-    padding: 12px;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-[data-property-cssclasses*="email-note"] .markdown-preview-view ul:has(a[href*="附件"]) li:hover,
-[data-property-cssclasses*="email-note"] .markdown-preview-view ul:has(a[href*="attachment"]) li:hover {
-    border-color: var(--mail-accent-blue);
-    background-color: var(--mail-hover-bg);
-    transform: translateY(-2px);
-    box-shadow: var(--mail-shadow);
-}
-
-/* 附件图标 - 仅在 email-note 内 */
-[data-property-cssclasses*="email-note"] .markdown-preview-view ul:has(a[href*="附件"]) li::before {
-    content: "📎";
-    font-size: 16px;
-}
+/* （原「附件卡片网格」样式依赖父级选择器判定附件列表，按插件审查 CSS lint 建议移除；附件在预览中保持普通列表形态） */
 
 /* ====================================
    表格样式优化（用于显示邮件信息）
@@ -300,15 +260,7 @@
    列表样式优化
    仅在 email-note 内生效
    ==================================== */
-[data-property-cssclasses*="email-note"] .markdown-preview-view ul:not(:has(a[href*="附件"])) {
-    padding-left: 24px;
-}
-
-[data-property-cssclasses*="email-note"] .markdown-preview-view ul:not(:has(a[href*="附件"])) li {
-    margin: 8px 0;
-    line-height: 1.6;
-    color: var(--mail-text-primary);
-}
+/* （原「普通列表缩进/间距」样式依赖否定父级选择器，随附件网格规则一并移除，列表回退主题默认样式） */
 
 /* ====================================
    图片样式优化

@@ -1,6 +1,6 @@
 {
   "name": "ob-mail-client",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Mail client plugin: send and receive email as Markdown notes",
   "main": "main.js",
   "scripts": {
@@ -32,5 +32,10 @@
     "mailparser": "^3.9.23",
     "nodemailer": "^9.1.1",
     "proxy-agent": "^6.5.0"
+  },
+  "overrides": {
+    "utf7": {
+      "semver": "5.7.2"
+    }
   }
 }

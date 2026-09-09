@@ -5,7 +5,7 @@
 在 Obsidian 中收发邮件的桌面端插件。核心理念：**每一封邮件都是一条 Markdown 笔记**——收取的邮件解析为带 frontmatter 的 Markdown 文件存入 Vault，天然融入 Obsidian 的双链、搜索与知识管理体系；同时提供 Foxmail 风格的三栏邮件视图与标签页式写信界面，兼顾传统邮件客户端的操作习惯。
 
 - 插件 ID：`ob-mail-client`（插件名：**Mail as Notes**）
-- 当前版本：**1.4.1**（变更见 [RELEASE_NOTES.md](RELEASE_NOTES.md)）
+- 当前版本：**1.4.2**（变更见 [RELEASE_NOTES.md](RELEASE_NOTES.md)）
 - 界面视图：Foxmail 三栏视图（账户/文件夹树 + 邮件列表 + 阅读窗格）
 
 ## 功能清单
@@ -95,12 +95,11 @@ obsidian-mail/
 | 重新收取邮件（重新解析已下载邮件） | 强制重新解析，用于修复解析问题 |
 | 回复邮件 / 回复全部邮件 / 转发邮件 / 作为附件转发邮件 / 标记为垃圾邮件 | 针对当前活动邮件笔记的操作 |
 
-## 发布流程（GitHub Release）
+## 发布流程（GitHub Actions 自动发布）
 
-插件目录审查要求 `main.js` 作为 Release 资产上传，**不得提交到仓库**（`.gitignore` 已排除）：
+插件目录审查要求 `main.js`、`manifest.json`、`styles.css` 作为 Release 资产上传，**不得提交到仓库**（`.gitignore` 已排除 `main.js` 与 `styles.css`）。发布由 `.github/workflows/release.yml` 全自动完成：
 
-1. `npm run build` 生成产物（`test_note/.obsidian/plugins/ob-mail-client/` 下的 `main.js` 与 `styles.css`）；
-2. 确认 `manifest.json` 的 `version` 与即将发布的 tag 一致；
-3. 在 GitHub 创建 Release：tag 与名称均使用版本号（如 `1.4.1`），并填写变更说明；
-4. 上传三个资产：`main.js`、`manifest.json`、`styles.css`（不要上传 zip 或其他额外文件）；
-5. 提交仓库变更（源码 + manifest），插件目录会自动重新审查。
+1. 更新 `manifest.json` 的 `version` 与 [RELEASE_NOTES.md](RELEASE_NOTES.md)，提交并推送；
+2. 打 tag 并推送（tag 名 = 版本号，如 `1.4.2`）：`git tag 1.4.2 && git push origin 1.4.2`；
+3. Action 自动执行：`npm ci` → `npm run build`（产物为仓库根 `main.js` 与 `styles.css`）→ 创建 GitHub Release（tag 作标题）并上传三个资产：`main.js`、`manifest.json`、`styles.css`（不含 zip 等其他文件）；
+4. 插件目录对新 Release 自动重新审查。

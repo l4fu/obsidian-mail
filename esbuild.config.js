@@ -20,43 +20,18 @@ const nodeBuiltins = [
   'node:events'
 ];
 
-// CSS / manifest 文件处理函数（保证测试 Vault 插件目录与仓库源一致）
-async function copyCSS() {
+// 生产构建把样式复制为仓库根 styles.css（Obsidian 加载插件时自动读取）。
+// main.js / styles.css 已加入 .gitignore，不作为源码提交；
+// 打 tag 时 .github/workflows/release.yml 会自动构建，并把 main.js / manifest.json / styles.css 上传为 Release 资产。
+function copyStyles() {
   const cssSource = path.join(__dirname, 'styles/foxmail-email.css');
-  const manifestSource = path.join(__dirname, 'manifest.json');
-  
-  // 两个目标位置都复制
-  const pluginDir = path.join(__dirname, './test_note/.obsidian/plugins/ob-mail-client');
-  const targets = [
-    { src: cssSource, dest: path.join(pluginDir, 'styles.css') },
-    { src: manifestSource, dest: path.join(pluginDir, 'manifest.json') },
-    // Windows Obsidian 实际插件目录
-    // { src: cssSource, dest: path.join(process.env.APPDATA || '', 'Obsidian/.obsidian/plugins/ob-mail-client/styles.css') }
-  ];
-  
-  try {
-    for (const { src, dest } of targets) {
-      try {
-        // 确保目标目录存在
-        const destDir = path.dirname(dest);
-        if (!fs.existsSync(destDir)) {
-          fs.mkdirSync(destDir, { recursive: true });
-        }
-        
-        // 复制文件
-        if (fs.existsSync(src)) {
-          fs.copyFileSync(src, dest);
-          console.log('✅ 已复制:', dest);
-        } else {
-          console.warn('⚠️ 警告：源文件不存在:', src);
-        }
-      } catch (err) {
-        console.warn('⚠️ 复制到', dest, '失败:', err.message);
-      }
-    }
-  } catch (err) {
-    console.error('❌ 复制文件失败:', err);
+  const cssDest = path.join(__dirname, 'styles.css');
+  if (!fs.existsSync(cssSource)) {
+    console.warn('⚠️ 警告：样式源文件不存在:', cssSource);
+    return;
   }
+  fs.copyFileSync(cssSource, cssDest);
+  console.log('✅ 已复制:', cssDest);
 }
 
 const config = {
@@ -71,12 +46,12 @@ const config = {
   logLevel: 'info',
   sourcemap: isProd ? false : 'inline',
   treeShaking: true,
-  outfile: './test_note/.obsidian/plugins/ob-mail-client/main.js',
+  outfile: 'main.js',
   plugins: [{
-    name: 'copy-css',
+    name: 'copy-styles',
     setup(build) {
-      build.onEnd(async () => {
-        await copyCSS();
+      build.onEnd(() => {
+        copyStyles();
       });
     }
   }]

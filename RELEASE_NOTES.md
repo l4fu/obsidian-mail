@@ -1,5 +1,23 @@
 # 📧 Mail as Notes（Ob-Mail）发布说明
 
+## v1.4.2（2026-09-09）—— 二次审查修复与 GitHub Actions 自动发布
+
+针对插件目录二次审查（Sep 9, 2026 / commit 9d58b3b）的整改，阻断上架的 **Error 已全部清零**；发布改为 GitHub Actions 全自动（tag 1.4.1 已占用，本版以 1.4.2 发布）。
+
+**Error（阻断上架项，已全部清零）**
+- Release 资产自动化：新增 `.github/workflows/release.yml`，推送与 `manifest.json` 版本一致的 tag 后自动构建并创建 GitHub Release，仅上传 `main.js`/`manifest.json`/`styles.css` 三个资产（构建产物不入库、不再附带 zip）
+- manifest 移除被判定为未知字段的 `repo`（仓库信息由插件目录侧维护，勿放回）
+
+**Warning（已修复）**
+- README 更名为大写 `README.md`（审查脚本按该文件名读取英文说明；内容已含英文段落）
+- CSS lint：移除 2 处 `!important`（提高选择器特异性替代）与 11 处 `:has()`（编辑器标题改用 `.HyperMD-header-1`，附件卡片网格等装饰规则移除，附件在预览中回退普通列表形态）
+- 依赖漏洞：`npm overrides` 将 imap → utf7 的传递依赖 `semver` 固定为 5.7.2（npm audit 归零，且规避 audit 建议的 breaking 降级）
+
+**延期项（Warning/Recommendation，同 v1.4.1，详见 docs/ANALYSIS.md §6.2）**
+- 大范围 `any` / `no-unsafe-*` / `no-explicit-any` 类型收敛、`console` 日志精简、floating promise 显式化、声明式设置 API `getSettingDefinitions()`
+
+> 发布已自动化：推送与 `manifest.json` 版本一致的 tag 后，`.github/workflows/release.yml` 会构建插件并创建 GitHub Release（上传 `main.js`/`manifest.json`/`styles.css` 三个资产）。
+
 ## v1.4.1（2026-09-08）—— 插件目录审查合规整改
 
 针对 Obsidian 官方插件目录自动审查结果（fix.txt）的整改。构建、tsc 类型检查（exit 0）与 31 项解析器单测均通过。
@@ -23,8 +41,6 @@
 - 大范围 `any` / `no-unsafe-*` / `no-explicit-any` 类型收敛
 - `console` 日志精简、floating promise 显式化
 - 声明式设置 API `getSettingDefinitions()`（1.13.0+）
-
-> 发布须将 `main.js`、`manifest.json`、`styles.css` 作为 GitHub Release 资产上传（不提交进仓库）。
 
 ---
 
