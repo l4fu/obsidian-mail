@@ -411,6 +411,8 @@ interface MailSettings {
   largeEmailThresholdMB: number;
   /** 因超过阈值而被跳过自动下载的邮件（按账户记录元数据，供后续手动下载） */
   oversizedEmails: Record<string, Array<{ uid: number; messageId: string; subject: string; size: number }>>;
+  /** 收取成功后是否在服务器上把该邮件标记为已读（\Seen）。开启后搜索只取未读，可大幅减少每次同步的服务端访问；关闭则每次都会扫描全部并靠 Message-ID 去重 */
+  markAsReadAfterFetch: boolean;
 }
 
 // 默认设置 - 邮件账户管理
@@ -424,7 +426,8 @@ const DEFAULT_SETTINGS: MailSettings = {
   htmlDisplayMode: 'html-styled', // 默认保留原始样式渲染（作用域 CSS，不污染 Obsidian）
   storageMode: 'daily', // 默认按年月日存储（YYYY-MM/YYYY-MM-DD/）
   largeEmailThresholdMB: 10, // 默认整封超过 10MB 视为超大邮件，不自动下载
-  oversizedEmails: {} // 默认无被跳过的超大邮件记录
+  oversizedEmails: {}, // 默认无被跳过的超大邮件记录
+  markAsReadAfterFetch: true // 默认收取后在服务器标记已读，使后续同步只取未读、减少服务端访问
 }
 
 // 辅助函数：从 Keychain 获取密码（支持向后兼容）
@@ -545,13 +548,24 @@ class MailSettingTab extends PluginSettingTab {
     // 超大邮件阈值设置
     new Setting(containerEl)
       .setName('超大邮件阈值（MB）')
-      .setDesc('整封邮件（含附件）超过此大小将跳过自动下载，仅记录待手动下载，避免触发邮件服务器对大报文的限流或断连。设为 0 表示不限制。')
+      .setDesc('整封邮件（含附件）超过此大小时，不再整封下载，而是仅收取正文、跳过大附件（可在命令面板手动整封下载），避免触发邮件服务器对大报文的限流或断连。设为 0 表示不限制、一律整封下载。')
       .addText(text => text
         .setPlaceholder('默认 10')
         .setValue((this.plugin.settings.largeEmailThresholdMB ?? 10).toString())
         .onChange(async (value) => {
           const mb = Math.max(0, parseInt(value) || 0);
           this.plugin.settings.largeEmailThresholdMB = mb;
+          await this.plugin.saveSettings();
+        }));
+
+    // 收取后标记已读
+    new Setting(containerEl)
+      .setName('收取后在服务器标记已读')
+      .setDesc('开启后，成功收取的邮件会在服务器上标记为已读（\\Seen），后续同步只搜索未读邮件，可显著减少服务端访问次数与重复扫描；已收取的邮件也不会再出现在未读/收件箱视图中。关闭则每次全量扫描并靠 Message-ID 去重。')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.markAsReadAfterFetch ?? true)
+        .onChange(async (value) => {
+          this.plugin.settings.markAsReadAfterFetch = value;
           await this.plugin.saveSettings();
         }));
     
@@ -3051,8 +3065,10 @@ export default class MailPlugin extends Plugin {
         console.log('15天前的日期:', fifteenDaysAgo);
         
         // 根据是否是自动同步选择搜索条件
-        // 自动同步时只搜索未读邮件
-        const searchCriteria = isAutoSync ? ['UNSEEN'] : ['ALL'];
+        // 开启"收取后标记已读"后，已收取的邮件会被标 \Seen，因此搜索 UNSEEN 即可只拿到未收取的邮件，
+        // 大幅减少每次同步的服务端访问（否则每次都要拉全部邮件头再靠 Message-ID 去重）。
+        const markReadAfterFetch = plugin.settings.markAsReadAfterFetch ?? true;
+        const searchCriteria = (isAutoSync || markReadAfterFetch) ? ['UNSEEN'] : ['ALL'];
         
         imapClient.search(searchCriteria, (err: any, allResults: any) => {
             if (err) {
@@ -3069,6 +3085,28 @@ export default class MailPlugin extends Plugin {
             console.log(`共发现 ${allResults.length} 封邮件`);
             console.log(`已获取的邮件ID数量: ${fetchedIds.length}`);
             
+            // 在服务器上把邮件标记为已读（\Seen）：批量 STORE，失败则回退逐封。非致命，失败仅告警。
+            // 放在搜索回调作用域：头部识别阶段（清理历史未读积压）与逐封下载成功后的标记都会用到。
+            const markSeen = (uids: number[]): Promise<void> => new Promise<void>((res) => {
+              const list = (uids || []).filter(n => typeof n === 'number' && n > 0);
+              if (list.length === 0 || !(plugin.settings.markAsReadAfterFetch ?? true)) { res(); return; }
+              const oneByOne = (idx: number) => {
+                if (idx >= list.length) { res(); return; }
+                try {
+                  imapClient.addFlags([list[idx]], '\\Seen', () => oneByOne(idx + 1));
+                } catch { oneByOne(idx + 1); }
+              };
+              try {
+                imapClient.addFlags(list, '\\Seen', (e: any) => {
+                  if (!e) { console.log(`已在服务器标记 ${list.length} 封为已读`); res(); }
+                  else { console.warn('批量标记已读失败，改为逐封标记:', e?.message || e); oneByOne(0); }
+                });
+              } catch (e) {
+                console.warn('标记已读异常，改为逐封标记:', (e as any)?.message || e);
+                oneByOne(0);
+              }
+            });
+
             // 定义处理邮件的函数
             // isFallback=true 表示这是"目标子集返回空"后的兜底整封下载，不再递归兜底
             const processEmails = (
@@ -3076,7 +3114,8 @@ export default class MailPlugin extends Plugin {
               onlyRecent: boolean = false,
               isFallback: boolean = false,
               onZero?: (received: number[]) => void,
-              metaByUid?: Map<number, { subject: string; size: number; messageId: string }>
+              metaByUid?: Map<number, { subject: string; size: number; messageId: string }>,
+              contentOnlyUids?: Set<number>
             ) => {
               if (results.length === 0) {
                 console.log('没有需要处理的邮件');
@@ -3122,6 +3161,303 @@ export default class MailPlugin extends Plugin {
                   return false;
                 }
               };
+
+              // 解析并入库（完整下载与"仅正文"下载共用）：contentOnly=true 表示只收了正文、未含附件
+              const runParseAndSave = async (emailBuffer: Buffer, uid: number, contentOnly: boolean): Promise<void> => {
+                try {
+                  console.log(`解析 UID ${uid} 邮件前的buffer长度:`, emailBuffer.length, contentOnly ? '（仅正文，跳过大附件）' : '');
+                  const parsed = await mailparser.simpleParser(emailBuffer, {
+                    skipImageLinks: true,
+                    defaultCharset: 'utf-8'
+                  });
+                  console.log('邮件解析结果:', {
+                    subject: parsed.subject,
+                    from: parsed.from?.text || '',
+                    to: parsed.to?.text || '',
+                    date: parsed.date,
+                    hasText: !!parsed.text,
+                    hasHtml: !!parsed.html,
+                    messageId: parsed.messageId,
+                    attachmentsCount: parsed.attachments?.length || 0
+                  });
+
+                  const messageId = parsed.messageId ? parsed.messageId.replace(/[<>]/g, '') : '';
+
+                  if (!force && messageId && fetchedIds.includes(messageId)) {
+                    console.log('邮件已存在，跳过:', messageId);
+                    return;
+                  }
+
+                  if (onlyRecent) {
+                    const emailDate = parsed.date ? new Date(parsed.date) : new Date();
+                    if (emailDate < fifteenDaysAgo) {
+                      console.log('跳过超过15天的邮件:', parsed.subject);
+                      return;
+                    }
+                  }
+
+                  console.log('邮件主题:', parsed.subject);
+                  console.log('邮件附件数量:', parsed?.attachments?.length);
+
+                  const attachments = parsed?.attachments || [];
+                  const emailStatus = '未读';
+
+                  let savedAttachments: any[] = [];
+                  if (attachments.length > 0) {
+                    savedAttachments = await plugin.saveAttachments(account, parsed, attachments);
+                  }
+                  const markdownContent = await plugin.createMarkdownContent(account, parsed, attachments, emailStatus, savedAttachments);
+                  await plugin.saveEmailToFile(account, parsed, markdownContent);
+
+                  const extractEmail = (str: string) => {
+                    const match = str.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
+                    return match || [];
+                  };
+                  const fromStr = parsed.from?.text || '';
+                  const toStr = parsed.to?.text || '';
+                  const addrEntries: Array<{ address?: string; name?: string }> = [
+                    ...((parsed.from?.value as any[]) || []),
+                    ...((parsed.to?.value as any[]) || [])
+                  ];
+                  if (addrEntries.length > 0) {
+                    for (const entry of addrEntries) {
+                      if (entry.address) {
+                        await plugin.collectContacts(entry.address, account, entry.name || '');
+                      }
+                    }
+                  } else {
+                    const emailAddresses = [...extractEmail(fromStr), ...extractEmail(toStr)];
+                    for (const email of emailAddresses) {
+                      await plugin.collectContacts(email, account);
+                    }
+                  }
+
+                  if (messageId) {
+                    fetchedIds.push(messageId);
+                    console.log('标记邮件为已获取:', messageId, contentOnly ? '（仅正文，大附件未下载）' : '');
+                  }
+                  downloadedCount++;
+                } catch (err) {
+                  console.error('解析邮件时出错:', err);
+                }
+              };
+
+              // 底层：对单个 UID 执行一次 FETCH，按 section（info.which）收集各段原始字节。
+              // 连接被服务器掐断时 reject（供上层判定 dropped 并重连），自身清理连接级监听。
+              const imapFetch = (client: any, uid: number, options: any): Promise<{ attrs: any; bodies: Record<string, Buffer> }> =>
+                new Promise((resolveP, rejectP) => {
+                  const attrsOut: any = {};
+                  const bodiesOut: Record<string, Buffer> = {};
+                  let settledL = false;
+                  let f: any;
+                  const cleanupL = () => {
+                    client.removeListener('end', onDeadL);
+                    client.removeListener('close', onDeadL);
+                  };
+                  const settle = (fn: () => void) => { if (settledL) return; settledL = true; cleanupL(); fn(); };
+                  const onDeadL = () => settle(() => rejectP(new Error('connection closed')));
+                  try {
+                    f = client.fetch([uid], options);
+                  } catch (e) {
+                    settledL = true;
+                    rejectP(e);
+                    return;
+                  }
+                  f.on('message', (msg: any) => {
+                    msg.on('attributes', (a: any) => { if (a) Object.assign(attrsOut, a); });
+                    msg.on('body', (stream: any, info: any) => {
+                      const key = info && info.which != null ? String(info.which) : '';
+                      const chunks: Buffer[] = [];
+                      stream.on('data', (c: any) => chunks.push(c));
+                      stream.once('end', () => { bodiesOut[key] = Buffer.concat(chunks); });
+                    });
+                  });
+                  client.once('end', onDeadL);
+                  client.once('close', onDeadL);
+                  f.once('error', (e: any) => settle(() => rejectP(e)));
+                  f.once('end', () => settle(() => resolveP({ attrs: attrsOut, bodies: bodiesOut })));
+                });
+
+              // 遍历 BODYSTRUCTURE，收集正文文本段（text/plain、text/html）的 section 路径与大小。
+              // 注意：node-imap 的 Parser 已把 BODYSTRUCTURE 解析成【对象树】，并非原始数组：
+              //   - 单段节点 = [ { partID, type, subtype, params, encoding, size, lines, body? } ]
+              //   - 多段节点 = [ { type: 'mixed'|'alternative', params }, 子节点数组, 子节点数组, ... ]
+              // 单段对象的 partID 即 IMAP 的 section 路径（如 '1'、'2'、'1.2'），正是 BODY[<partID>] 要用的。
+              const collectTextParts = (node: any, out: Array<{ section: string; subtype: string; size: number }>) => {
+                if (!Array.isArray(node)) return;
+                const head = node[0];
+                if (head && typeof head === 'object' && !Array.isArray(head)) {
+                  const type = String(head.type || '').toLowerCase();
+                  const subtype = String(head.subtype || '').toLowerCase();
+                  if (head.partID && type === 'text' && (subtype === 'html' || subtype === 'plain')) {
+                    out.push({ section: String(head.partID), subtype, size: Number(head.size) || 0 });
+                  } else if (type === 'message' && subtype === 'rfc822' && Array.isArray(head.body)) {
+                    // 嵌套转发的邮件，其内部正文段也可收（partID 已由库按前缀算好）
+                    collectTextParts(head.body, out);
+                  }
+                }
+                // multipart 节点：从下标 1 开始是各子节点数组
+                for (let i = 1; i < node.length; i++) {
+                  if (Array.isArray(node[i])) collectTextParts(node[i], out);
+                }
+              };
+
+              // 选出最合适的正文段：优先 HTML，其次 PLAIN；同类型取较大者（通常是完整正文）
+              const pickTextSection = (struct: any): string | null => {
+                const parts: Array<{ section: string; subtype: string; size: number }> = [];
+                collectTextParts(struct, parts);
+                const valid = parts.filter(p => p.section && p.section.length > 0);
+                if (valid.length === 0) return null;
+                const html = valid.filter(p => p.subtype === 'html').sort((a, b) => b.size - a.size);
+                if (html.length > 0) return html[0].section;
+                return valid.sort((a, b) => b.size - a.size)[0].section;
+              };
+
+              // 收集附件段（非正文文本段）的文件名/类型/大小，用于"正文取不到"时的占位笔记说明
+              const collectAttachmentParts = (node: any, out: Array<{ name: string; type: string; size: number }>) => {
+                if (!Array.isArray(node)) return;
+                const head = node[0];
+                if (head && typeof head === 'object' && !Array.isArray(head)) {
+                  const type = String(head.type || '').toLowerCase();
+                  const subtype = String(head.subtype || '').toLowerCase();
+                  const isBodyText = type === 'text' && (subtype === 'plain' || subtype === 'html');
+                  const params = head.params || {};
+                  const dispParams = (head.disposition && head.disposition.params) || {};
+                  const dispType = String((head.disposition && head.disposition.type) || '').toLowerCase();
+                  const name = dispParams.filename || params.name || '';
+                  if (!isBodyText && (name || dispType === 'attachment')) {
+                    out.push({
+                      name: name || `${type}/${subtype}`,
+                      type: `${type}/${subtype}`,
+                      size: Number(head.size) || 0
+                    });
+                  }
+                  if (type === 'message' && subtype === 'rfc822' && Array.isArray(head.body)) {
+                    collectAttachmentParts(head.body, out);
+                  }
+                }
+                for (let i = 1; i < node.length; i++) {
+                  if (Array.isArray(node[i])) collectAttachmentParts(node[i], out);
+                }
+              };
+
+              // 将原始头部字节拆成 [{name, raw}]（保留折叠续行），遇空行停止
+              const splitHeaders = (buf: Buffer): Array<{ name: string; raw: string }> => {
+                const text = buf.toString('binary');
+                const lines = text.split(/\r?\n/);
+                const headers: Array<{ name: string; raw: string }> = [];
+                let cur: { name: string; raw: string } | null = null;
+                for (const line of lines) {
+                  if (line === '') { if (cur) headers.push(cur); break; }
+                  if (/^[ \t]/.test(line)) { if (cur) cur.raw += '\r\n' + line; continue; }
+                  if (cur) headers.push(cur);
+                  const idx = line.indexOf(':');
+                  const name = idx >= 0 ? line.slice(0, idx).trim().toLowerCase() : '';
+                  cur = { name, raw: line };
+                }
+                if (cur) headers.push(cur);
+                return headers;
+              };
+
+              // 用「顶层身份头 + 正文段自身 MIME 头 + 正文段原始（仍按传输编码）字节」合成一封合法单段邮件，
+              // 丢弃原 multipart 的 Content-Type/boundary，交给 mailparser 正常解析（会自动按 CTE 解码）
+              const buildSinglePartMessage = (headerBuf: Buffer, mimeBuf: Buffer, bodyBuf: Buffer): Buffer => {
+                const KEEP = new Set(['from', 'to', 'cc', 'bcc', 'subject', 'date', 'message-id', 'reply-to', 'in-reply-to', 'references', 'sender']);
+                const idHeaders = splitHeaders(headerBuf).filter(h => KEEP.has(h.name)).map(h => h.raw);
+                const mimeHeaders = splitHeaders(mimeBuf)
+                  .filter(h => h.name === 'content-type' || h.name === 'content-transfer-encoding')
+                  .map(h => h.raw);
+                if (mimeHeaders.length === 0) mimeHeaders.push('Content-Type: text/plain; charset=utf-8');
+                const head = idHeaders.concat(mimeHeaders).join('\r\n');
+                return Buffer.concat([Buffer.from(head + '\r\n\r\n', 'binary'), bodyBuf]);
+              };
+
+              // 仅取正文（跳过大附件）：先取 BODYSTRUCTURE+HEADER 定位正文段，再只取该段 MIME 头与内容
+              const fetchContentOnlyAttempt = (uid: number, done: (res: { received: boolean; dropped: boolean }) => void) => {
+                let received = false;
+                let settled = false;
+                const client = imapClient;
+                const tasks: Promise<void>[] = [];
+                let watchdog: any;
+                const cleanup = () => {
+                  if (watchdog) { clearTimeout(watchdog); watchdog = undefined; }
+                  client.removeListener('end', onDead);
+                  client.removeListener('close', onDead);
+                };
+                const finish = async (err?: any, forceDropped = false) => {
+                  if (settled) return;
+                  settled = true;
+                  cleanup();
+                  await Promise.allSettled(tasks);
+                  if (err) console.error(`获取 UID ${uid}（仅正文）出错:`, err?.message || err);
+                  const dropped = forceDropped || (!!err && isTeardownError(err));
+                  done({ received, dropped });
+                };
+                const onDead = () => finish(new Error('connection closed'), true);
+                client.once('end', onDead);
+                client.once('close', onDead);
+                watchdog = setTimeout(() => finish(new Error(`UID ${uid} 仅正文 FETCH 超时`), true), FETCH_TIMEOUT_MS);
+
+                (async () => {
+                  console.log(`UID ${uid}：超大邮件，改用 BODYSTRUCTURE 仅取正文（跳过大附件）`);
+                  const s1 = await imapFetch(client, uid, { struct: true, bodies: 'HEADER' });
+                  const headerBuf: Buffer = s1.bodies['HEADER'] || Buffer.alloc(0);
+                  const struct = s1.attrs?.struct;
+                  if (headerBuf.length === 0) {
+                    await finish(new Error(`UID ${uid} 连头部都未取到（服务器返回空）`));
+                    return;
+                  }
+
+                  // 兜底：结构里确实没有可取的正文段（例如整封都是附件）时，仍保存一条占位笔记，
+                  // 记录主题/发件人/日期与附件清单。否则这封邮件既看不见，又会每次同步被反复重试。
+                  const saveStubNote = async (reason: string) => {
+                    const atts: Array<{ name: string; type: string; size: number }> = [];
+                    collectAttachmentParts(struct, atts);
+                    const lines = [
+                      '（这封邮件体积较大，自动收取时未能提取正文，已跳过大附件下载。）',
+                      `原因：${reason}`
+                    ];
+                    if (atts.length > 0) {
+                      lines.push('', `附件清单（共 ${atts.length} 个，未下载）：`);
+                      for (const a of atts.slice(0, 50)) {
+                        lines.push(`- ${a.name}（${a.type}，${(a.size / 1024 / 1024).toFixed(2)}MB）`);
+                      }
+                      if (atts.length > 50) lines.push(`- …另有 ${atts.length - 50} 个附件`);
+                    }
+                    lines.push('', '请到邮箱网页端查看原文。');
+                    const mime = Buffer.from('Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n', 'binary');
+                    const synthetic = buildSinglePartMessage(headerBuf, mime, Buffer.from(lines.join('\n'), 'utf8'));
+                    received = true;
+                    tasks.push(runParseAndSave(synthetic, uid, true));
+                    await finish();
+                  };
+                  // 诊断：打印正文候选段（避免结构解析出错时无从下手）
+                  const debugParts: Array<{ section: string; subtype: string; size: number }> = [];
+                  collectTextParts(struct, debugParts);
+                  console.log(`UID ${uid} 正文候选段:`, debugParts.map(p => `${p.section}:${p.subtype}(${p.size}B)`).join(' | ') || '(无)');
+                  const sec = pickTextSection(struct);
+                  if (!sec) {
+                    console.warn(`UID ${uid} 结构中无正文文本段（可能整封都是附件），改为保存占位笔记`);
+                    await saveStubNote('结构中未找到 text/plain 或 text/html 正文段');
+                    return;
+                  }
+                  const s2 = await imapFetch(client, uid, { bodies: [`${sec}.MIME`, sec] });
+                  const mimeBuf: Buffer = s2.bodies[`${sec}.MIME`] || Buffer.alloc(0);
+                  const bodyBuf: Buffer = s2.bodies[sec] || Buffer.alloc(0);
+                  if (bodyBuf.length === 0) {
+                    console.warn(`UID ${uid} 正文段 ${sec} 返回空，改为保存占位笔记`);
+                    await saveStubNote(`正文段 ${sec} 内容为空`);
+                    return;
+                  }
+                  const synthetic = buildSinglePartMessage(headerBuf, mimeBuf, bodyBuf);
+                  received = true;
+                  tasks.push(runParseAndSave(synthetic, uid, true));
+                  await finish();
+                })().catch(err => finish(err));
+              };
+
+              const attemptContentOnly = (uid: number) =>
+                new Promise<{ received: boolean; dropped: boolean }>(r => fetchContentOnlyAttempt(uid, r));
 
               // 取单封邮件：回调返回 { received, dropped }（dropped 表示连接断开，需要重连重试）
               const FETCH_TIMEOUT_MS = 30000;
@@ -3171,85 +3507,7 @@ export default class MailPlugin extends Plugin {
                     stream.once('end', () => {
                       // 只有报文完整接收（stream end）才算“成功取到”，避免传输中途被断开时误判成功而跳过续传
                       received = true;
-                      const task = (async () => {
-                        try {
-                          console.log('解析邮件前的buffer长度:', emailBuffer.length);
-                          const parsed = await mailparser.simpleParser(emailBuffer, {
-                            skipImageLinks: true,
-                            defaultCharset: 'utf-8'
-                          });
-                          console.log('邮件解析结果:', {
-                            subject: parsed.subject,
-                            from: parsed.from?.text || '',
-                            to: parsed.to?.text || '',
-                            date: parsed.date,
-                            hasText: !!parsed.text,
-                            hasHtml: !!parsed.html,
-                            messageId: parsed.messageId,
-                            attachmentsCount: parsed.attachments?.length || 0
-                          });
-
-                          const messageId = parsed.messageId ? parsed.messageId.replace(/[<>]/g, '') : '';
-
-                          if (!force && messageId && fetchedIds.includes(messageId)) {
-                            console.log('邮件已存在，跳过:', messageId);
-                            return;
-                          }
-
-                          if (onlyRecent) {
-                            const emailDate = parsed.date ? new Date(parsed.date) : new Date();
-                            if (emailDate < fifteenDaysAgo) {
-                              console.log('跳过超过15天的邮件:', parsed.subject);
-                              return;
-                            }
-                          }
-
-                          console.log('邮件主题:', parsed.subject);
-                          console.log('邮件附件数量:', parsed?.attachments?.length);
-
-                          const attachments = parsed?.attachments || [];
-                          const emailStatus = '未读';
-
-                          let savedAttachments: any[] = [];
-                          if (attachments.length > 0) {
-                            savedAttachments = await plugin.saveAttachments(account, parsed, attachments);
-                          }
-                          const markdownContent = await plugin.createMarkdownContent(account, parsed, attachments, emailStatus, savedAttachments);
-                          await plugin.saveEmailToFile(account, parsed, markdownContent);
-
-                          const extractEmail = (str: string) => {
-                            const match = str.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
-                            return match || [];
-                          };
-                          const fromStr = parsed.from?.text || '';
-                          const toStr = parsed.to?.text || '';
-                          const addrEntries: Array<{ address?: string; name?: string }> = [
-                            ...((parsed.from?.value as any[]) || []),
-                            ...((parsed.to?.value as any[]) || [])
-                          ];
-                          if (addrEntries.length > 0) {
-                            for (const entry of addrEntries) {
-                              if (entry.address) {
-                                await plugin.collectContacts(entry.address, account, entry.name || '');
-                              }
-                            }
-                          } else {
-                            const emailAddresses = [...extractEmail(fromStr), ...extractEmail(toStr)];
-                            for (const email of emailAddresses) {
-                              await plugin.collectContacts(email, account);
-                            }
-                          }
-
-                          if (messageId) {
-                            fetchedIds.push(messageId);
-                            console.log('标记邮件为已获取:', messageId);
-                          }
-                          downloadedCount++;
-                        } catch (err) {
-                          console.error('解析邮件时出错:', err);
-                        }
-                      })();
-                      messagePromises.push(task);
+                      messagePromises.push(runParseAndSave(emailBuffer, uid, false));
                     });
                   });
                 });
@@ -3295,7 +3553,9 @@ export default class MailPlugin extends Plugin {
                 const uid = results[index];
                 // 逐封之间留一点间隔，避免命令过于密集触发服务器限流断开
                 if (index > 0) await sleep(300);
-                let res = await attemptOnce(uid);
+                // 超大邮件走"仅正文"抓取（跳过大附件），普通邮件走完整抓取
+                const attempt = contentOnlyUids?.has(uid) ? attemptContentOnly : attemptOnce;
+                let res = await attempt(uid);
 
                 // 单封因连接断开：最多重连重试 PER_UID_DROP_RETRY 次。
                 // 仍失败则判定为"毒邮件"（服务器对该封固定掐断），跳过它继续下一封，
@@ -3308,12 +3568,14 @@ export default class MailPlugin extends Plugin {
                   await sleep(Math.min(1000 * reconnects, 5000)); // 退避，别被服务器判定为滥用
                   const ok = await reconnectAndSelect();
                   if (!ok) { finalize(); return; }
-                  res = await attemptOnce(uid);
+                  res = await attempt(uid);
                 }
 
                 if (res.received) {
                   totalReceived++;
                   dropStreak = 0;
+                  // 收取成功后在服务器标记已读，使下次搜索只命中未读、减少重复扫描
+                  await markSeen([uid]);
                   await persistProgress();
                   processOne(index + 1);
                   return;
@@ -3341,10 +3603,11 @@ export default class MailPlugin extends Plugin {
 
                 // 非断开：服务器返回空/未命中，同一连接快速重试一次后跳过，不做无谓重连
                 await sleep(500);
-                const retry = await attemptOnce(uid);
+                const retry = await attempt(uid);
                 if (retry.received) {
                   totalReceived++;
                   dropStreak = 0;
+                  await markSeen([uid]);
                   await persistProgress();
                   processOne(index + 1);
                   return;
@@ -3426,7 +3689,7 @@ export default class MailPlugin extends Plugin {
               processEmails(candidates, false);
             });
 
-            headerFetch.once('end', () => {
+            headerFetch.once('end', async () => {
               // 新邮件 = Message-ID 不在已获取列表中（取不到 ID 的保守纳入，交由完整下载后的二次去重）
               const newEntries = headerInfos.filter(info => !info.messageId || !fetchedSet.has(info.messageId));
               const skippedExisting = headerInfos.filter(info => info.messageId && fetchedSet.has(info.messageId));
@@ -3434,6 +3697,9 @@ export default class MailPlugin extends Plugin {
               // 诊断：列出被判为"已收取"而跳过的邮件，方便核对是否有"其实没收到却被标为已收取"的情况
               if (skippedExisting.length > 0) {
                 console.log('已收取（跳过）明细：', skippedExisting.map(e => `${e.uid}:${e.subject}<${e.messageId}>`).join(' | '));
+                // 这些邮件此前已收取但可能仍为未读（历史遗留）：顺手标记已读，清理积压，
+                // 之后 UNSEEN 搜索就不会再反复把它们拉回来。
+                await markSeen(skippedExisting.map(e => e.uid));
               }
               const noUidCount = candidates.length - headerInfos.length;
               if (noUidCount > 0) {
@@ -3472,34 +3738,41 @@ export default class MailPlugin extends Plugin {
                   // 仅对本次新记录的超大邮件提示；自动同步只静默记录，避免每 5 分钟重复弹提示
                   if (newlyRecorded.length > 0 && !isAutoSync) {
                     const names = newlyRecorded.map(e => `${e.subject}（${(e.size / 1024 / 1024).toFixed(1)}MB）`).join('\n');
-                    console.log(`跳过 ${newlyRecorded.length} 封超过 ${thresholdMB}MB 的邮件：`, names);
-                    new Notice(`已跳过 ${newlyRecorded.length} 封超大邮件（>${thresholdMB}MB），可手动下载：\n${names}`);
+                    console.log(`${newlyRecorded.length} 封超过 ${thresholdMB}MB 的邮件将仅收取正文（跳过大附件，可日后手动整封下载）：`, names);
+                    new Notice(`${newlyRecorded.length} 封超大邮件（>${thresholdMB}MB）将仅收取正文、跳过大附件，可日后手动下载：\n${names}`);
                   } else if (newlyRecorded.length > 0) {
-                    console.log(`自动同步：静默记录 ${newlyRecorded.length} 封超大邮件（>${thresholdMB}MB）`);
+                    console.log(`自动同步：${newlyRecorded.length} 封超大邮件（>${thresholdMB}MB）仅收取正文、跳过大附件`);
                   }
                 }
 
+                // 超大邮件也参与本次收取，但走"仅正文"模式（跳过大附件，只取头部+正文文本段），
+                // 既避免服务器因大报文掐断连接，又能把邮件内容收进来；附件仍可日后手动整封下载。
+                const contentOnlyUids = new Set<number>(
+                  oversizedEntries.map(e => e.uid).filter(n => typeof n === 'number' && n > 0)
+                );
+
                 // 按真实 UID 去重升序：imapClient.fetch 即 UID FETCH，用 UID 才能精确命中"新邮件"正文
-                const uids = [...new Set(normalEntries.map(e => e.uid))]
+                const downloadable = [...normalEntries, ...oversizedEntries];
+                const uids = [...new Set(downloadable.map(e => e.uid))]
                   .filter(n => typeof n === 'number' && n > 0)
                   .sort((a, b) => a - b);
-                console.log(`本次将完整下载 ${uids.length} 封新邮件（另有 ${oversizedEntries.length} 封超大邮件被跳过），UID=[${uids.join(',')}]`,
-                  normalEntries.map(e => `${e.uid}:${e.messageId}`).join(' | '));
+                console.log(`本次将下载 ${uids.length} 封新邮件（其中 ${contentOnlyUids.size} 封超大邮件仅取正文、跳过大附件），UID=[${uids.join(',')}]`,
+                  downloadable.map(e => `${e.uid}:${e.messageId}${contentOnlyUids.has(e.uid) ? '(仅正文)' : ''}`).join(' | '));
                 if (uids.length === 0) {
-                  console.log('没有需要立即下载的普通新邮件，结束');
+                  console.log('没有需要立即下载的新邮件，结束');
                   resolve();
                   return;
                 }
 
                 // 逐封 UID 下载（单封断开最多重连重试 1 次后跳过，避免个别毒邮件卡住整批）
                 const metaByUid = new Map<number, { subject: string; size: number; messageId: string }>(
-                  normalEntries.map(e => [e.uid, { subject: e.subject, size: e.size, messageId: e.messageId }])
+                  downloadable.map(e => [e.uid, { subject: e.subject, size: e.size, messageId: e.messageId }])
                 );
                 processEmails(uids, false, false, () => {
                   console.warn('本次所有新邮件逐封 UID 取正文均未取到，已跳过（不做暴力全量下载，可稍后重试或手动单封下载）');
                   new Notice('部分新邮件本次未能取回正文，已跳过；可稍后重试');
                   resolve();
-                }, metaByUid);
+                }, metaByUid, contentOnlyUids);
               };
 
               // 自动同步：只下载最近 15 天内的新邮件（更符合"收取最新"的诉求）
